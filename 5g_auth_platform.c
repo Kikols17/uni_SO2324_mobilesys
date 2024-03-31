@@ -28,8 +28,8 @@ int parallel_MonitorEngine();
  * RECEIVER: Used to recieve requests from mobile clients
  * SENDER: Used to send to Authorization_Engine's
  */
-void *receiver_ARM(void *arg);
-void *sender_ARM(void *arg);
+void *receiver_ARM();
+void *sender_ARM();
 
 
 
@@ -71,11 +71,12 @@ int main(int argc, char *argv[]) {
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
     append_logfile("PROCESS SYSTEM_MANAGER CREATED");
 
+    // Create all 3 child proccess of the system
     parallel_AuthorizationRequestManager();
     parallel_AuthorizationEngine();
     parallel_MonitorEngine();
 
-    while (1) {}
+    while (1) {}        // mantain open to manage the shared memory and semaphores
     return 0;
 }
 
@@ -91,6 +92,7 @@ void sigint_handler_SystemManager() {
         sem_close(log_sem);         // }
         sem_unlink("log_sem");      // } unlink and close log_sem
     }
+    /* If is child proccess (ARM/AE/ME), simply terminate */
         
     exit(0);
 }
@@ -101,6 +103,7 @@ int append_logfile(char *log_info) {
     sem_wait(log_sem);
     FILE *log = fopen(LOG_FILE, "a");
     if (log==NULL) {
+        // Could not open file
         fprintf(stderr, "[ERROR] Could not open file \"%s\".\n", LOG_FILE);
         // Don't log error, obviously
         return 1;
@@ -113,9 +116,9 @@ int append_logfile(char *log_info) {
     time(&posix_time);      // Get time since epoch
     time_struct = localtime(&posix_time);
 
-    strftime(time_buffer, 80, "%X", time_struct);
-    fprintf(log,    "%s %s\n", time_buffer, log_info);
-    fprintf(stdout, "%s %s\n", time_buffer, log_info);
+    strftime(time_buffer, 80, "%X", time_struct);       // write time hour:min:sec
+    fprintf(log,    "%s %s\n", time_buffer, log_info);      // } Write log info to log.txt
+    fprintf(stdout, "%s %s\n", time_buffer, log_info);      // } and to terminal
 
     fclose(log);
     sem_post(log_sem);
@@ -123,19 +126,22 @@ int append_logfile(char *log_info) {
 }
 
 int read_configfile(char *configfile) {
+    /* Read from filepath "configfile", and write to global Settings "settings" */
     FILE *file = fopen(configfile, "r");
     if (file==NULL) {
+        // could not open file
         fprintf(stderr, "[ERROR] Could not open config file \"%s\".\n", configfile);
         return 1;
     }
 
-
     if ( fscanf(file, "%d\n%d\n%d\n%d\n%d\n%d", &settings.MOBILE_USERS, &settings.QUEUE_POS, &settings.AUTH_SERVERS, &settings.AUTH_PROC_TIME, &settings.MAX_VIDEO_WAIT, &settings.MAX_OTHERS_WAIT)!=6 ) {
+        // if fscanf does not read 6 numbers, fail, incorrect format
         fprintf(stderr, "[ERROR] File \"%s\" is not formated correctly.\n", configfile);
         return 1;
     }
 
-    fprintf( stdout, "Settings:\n\tMOBILE_USERS->%d\n\tQUEUE_POS->%d\n\tAUTH_SERVERS->%d\n\tAUTH_PROC_TIME->%d\n\tMAX_VIDEO_WAIT->%d\n\tMAX_OTHERS_WAIT->%d\n", settings.MOBILE_USERS, settings.QUEUE_POS, settings.AUTH_SERVERS, settings.AUTH_PROC_TIME, settings.MAX_VIDEO_WAIT, settings.MAX_OTHERS_WAIT );
+    // DEBUG show settings
+    fprintf( stdout, "[DEBUG] Settings:\n\tMOBILE_USERS->%d\n\tQUEUE_POS->%d\n\tAUTH_SERVERS->%d\n\tAUTH_PROC_TIME->%d\n\tMAX_VIDEO_WAIT->%d\n\tMAX_OTHERS_WAIT->%d\n", settings.MOBILE_USERS, settings.QUEUE_POS, settings.AUTH_SERVERS, settings.AUTH_PROC_TIME, settings.MAX_VIDEO_WAIT, settings.MAX_OTHERS_WAIT );
 
     fclose(file);
     return 0;
@@ -209,14 +215,14 @@ int parallel_MonitorEngine() {
 
 
 
-void *receiver_ARM(void *arg) {
+void *receiver_ARM() {
     /* Reciever (AUTHORIZATION_REQUEST_MANAGER) */
     append_logfile("THREAD RECEIVER CREATED");
     while (1) {}        // TODO[META1] make receiver
     return NULL;
 }
 
-void *sender_ARM(void *arg) {
+void *sender_ARM() {
     /* Sender (AUTHORIZATION_REQUEST_MANAGER) */
     append_logfile("THREAD RECEIVER CREATED");
     while (1) {}        // TODO[META1] make sender

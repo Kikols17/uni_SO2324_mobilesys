@@ -8,7 +8,7 @@
 int main(int argc, char *argv[]) {
     char buff_out[BUF_SIZE];            // Store messages to write to pipe
     int init_plafond;
-    int max_request, request_count = 0;
+    int max_request;
     int video_interval, music_interval, social_interval;
     int request_size;
 
