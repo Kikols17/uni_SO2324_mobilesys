@@ -21,6 +21,9 @@ int read_configfile(char *configfile);
 // Handle SIGINT signal (^C), closing all processes cleanly, and freeing shared memory
 void sigint_handler();
 
+// Create shared memory
+int create_sharedmem();
+
 /* Creates child proccesses parallel to the parent proccess
  * parallel_AuthorizationRequestManager creates ARM
  * parallel_AuthorizationEngine creates AE
