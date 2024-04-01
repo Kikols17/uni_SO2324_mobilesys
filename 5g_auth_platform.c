@@ -18,7 +18,7 @@ int append_logfile(char *log_info);
 int read_configfile(char *configfile);
 
 // Handle SIGINT signal (^C), closing all processes cleanly, and freeing shared memory
-void sigint_handler_SystemManager();
+void sigint_handler();
 
 /* Creates child proccesses parallel to the parent proccess
  * parallel_AuthorizationRequestManager creates ARM
@@ -55,7 +55,7 @@ int pid;
 
 int main(int argc, char *argv[]) {
     pid = getpid();
-    signal(SIGINT, sigint_handler_SystemManager);       // redirect ^C (ctrl+c) command
+    signal(SIGINT, sigint_handler);       // redirect ^C (ctrl+c) command
     if (argc!=2) {
         fprintf(stderr, "!!!INCORRECT ARGUMENTS!!!\n-> %s {config-file}\n", argv[0]);
         return 1;
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
     log_sem = sem_open("log_sem", O_CREAT, 0777, 1);
     if ( log_sem==SEM_FAILED ) {
         fprintf(stderr, "ERROR CAN'T CREATING SEMAPHORE\n");
-        sigint_handler_SystemManager();
+        sigint_handler();
     }
 
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
@@ -87,7 +87,7 @@ int main(int argc, char *argv[]) {
 
 
 
-void sigint_handler_SystemManager() {
+void sigint_handler() {
     if (pid!=0) {
         /* If is father proccess (SYSTEM_MANAGER) */
         append_logfile("SIGNAL SIGINT RECEIVED");
