@@ -14,7 +14,7 @@ mobile_user: mobile_user.o
 
 
 5g_auth_platform.o: 5g_auth_platform.c
-	gcc -Wall -Wextra -c 5g_auth_platform.c
+	gcc -Wall -Wextra -pthread -c 5g_auth_platform.c
 
 backoffice_user.o: backoffice_user.c
 	gcc -Wall -Wextra -c backoffice_user.c
