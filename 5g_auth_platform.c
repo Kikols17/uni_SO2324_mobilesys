@@ -85,6 +85,11 @@ int main(int argc, char *argv[]) {
         sigint_handler();
     }
 
+    /* Create shared memory */
+    if ( create_sharedmem()!=0 ) {
+        sigint_handler();
+    }
+
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
     append_logfile("PROCESS SYSTEM_MANAGER CREATED");
 
