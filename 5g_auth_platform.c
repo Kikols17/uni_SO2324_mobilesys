@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <sys/shm.h>
 #include <time.h>
 
 #define LOG_FILE "log.txt"
@@ -48,10 +49,18 @@ typedef struct Settings {
     int MAX_OTHERS_WAIT;    // tempo máximo (em ms) que os pedidos de autorização dos serviços de música e de redes sociais, bem como os comandos podem aguardar para serem executados (>=1)
 } Settings;
 
+typedef struct User_data {
+    int id;
+    int plafond_left;
+} User_data;
+
 
 sem_t *log_sem;
 struct Settings settings;
 int pid;
+
+int shmid;
+User_data *user_array;
 
 int main(int argc, char *argv[]) {
     pid = getpid();
@@ -96,10 +105,27 @@ void sigint_handler() {
         append_logfile("5G_AUTH_PLATFORM SIMULATOR CLOSING\n+----------------------------------------------------------------------+");
         sem_close(log_sem);         // }
         sem_unlink("log_sem");      // } unlink and close log_sem
+        shmdt(user_array);              // }
+        shmctl(shmid, IPC_RMID, 0);     // } free shared memory
     }
     /* If is child proccess (ARM/AE/ME), simply terminate */
         
     exit(0);
+}
+
+int create_sharedmem() {
+    /* Create sharedmemory (user_array) */
+    shmid = shmget(IPC_PRIVATE, sizeof(User_data) * settings.MOBILE_USERS, IPC_CREAT | 0777);
+    if (shmid == -1) {
+        fprintf(stderr, "[ERROR] Could not create shared memory\n");
+        return 1;
+    }
+    user_array = (User_data*) shmat(shmid, NULL, 0);
+    if (user_array == (void*)-1) {
+        fprintf(stderr, "[ERROR] Could not assign shared memory\n");
+        return 1;
+    }
+    return 0;
 }
 
 
