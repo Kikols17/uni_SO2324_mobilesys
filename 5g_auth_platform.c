@@ -270,7 +270,7 @@ void *receiver_ARM() {
 
 void *sender_ARM() {
     /* Sender (AUTHORIZATION_REQUEST_MANAGER) */
-    append_logfile("THREAD RECEIVER CREATED");
+    append_logfile("THREAD SENDER CREATED");
     while (1) {}        // TODO[META1] make sender
     return NULL;
 }
