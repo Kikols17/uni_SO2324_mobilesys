@@ -1,3 +1,11 @@
+/* 
+ * Versão de 1ªMeta da disciplina Sistemas Operativos
+ * 
+ * TRABALHO REALIZADO POR:
+ *      Francisco Amado Lapa Marques Silva - 2022213583
+ *      Miguel Moital Rodrigues Cabral Martins - 2022213951
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
