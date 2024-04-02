@@ -30,7 +30,7 @@ int create_sharedmem();
  * parallel_MonitorEngine creates ME
  */
 int parallel_AuthorizationRequestManager();
-int parallel_AuthorizationEngine();
+int parallel_AuthorizationEngine(int n);
 int parallel_MonitorEngine();
 
 /* Authorization_Request_Manager's threads.
@@ -95,7 +95,9 @@ int main(int argc, char *argv[]) {
 
     // Create all 3 child proccess of the system
     parallel_AuthorizationRequestManager();
-    parallel_AuthorizationEngine();
+    for (int i=0; i<settings.AUTH_SERVERS; i++) {
+        parallel_AuthorizationEngine(i+1);
+    }
     parallel_MonitorEngine();
 
     while (1) {}        // mantain open to manage the shared memory and semaphores
@@ -202,12 +204,20 @@ int parallel_AuthorizationRequestManager() {
 
 
     // if pid=0, child process, now authorization request manager
+
+    pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
+
+    pthread_create(&reciever, NULL, receiver_ARM, NULL);
+    pthread_create(&sender, NULL, sender_ARM, NULL);
+    pthread_join(reciever, NULL);
+    pthread_join(sender, NULL);
+
     while (1) {}        // TODO[META1] do AUTHORIZATION_REQUEST_MANAGER
     exit(0);
 }
 
-int parallel_AuthorizationEngine() {
+int parallel_AuthorizationEngine(int n) {
     /* Creates a new process that will have the role of AUTHORIZATION_ENGINE */
     pid = fork();
     if (pid<0) {
@@ -221,13 +231,10 @@ int parallel_AuthorizationEngine() {
 
 
     // if pid=0, child process, now authorization engine
-    pthread_t reciever, sender;
-    append_logfile("PROCESS AUTHORIZATION_ENGINE CREATED");
-
-    pthread_create(&reciever, NULL, receiver_ARM, NULL);
-    pthread_create(&sender, NULL, sender_ARM, NULL);
-    pthread_join(reciever, NULL);
-    pthread_join(sender, NULL);
+    int id = n;
+    char message[BUF_SIZE];
+    sprintf(message, "PROCESS AUTHORIZATION_ENGINE %d CREATED", id);
+    append_logfile(message);
 
     while (1) {}        // TODO[META1] do AUTHORIZATION_ENGINE
     exit(0);
