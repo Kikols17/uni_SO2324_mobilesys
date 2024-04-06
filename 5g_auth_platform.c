@@ -22,6 +22,9 @@
 #define BUF_SIZE 1024
 
 
+// Verify that "settings"' values are valid
+int validate_settings();
+
 // Write to log, and read from .config file
 int append_logfile(char *log_info);
 int read_configfile(char *configfile);
@@ -76,16 +79,20 @@ User_data *user_array;
 
 int main(int argc, char *argv[]) {
     system_manager_pid = getpid();
-    
+
     signal(SIGINT, sigint_handler);       // redirect ^C (ctrl+c) command
     if (argc!=2) {
         fprintf(stderr, "!!!INCORRECT ARGUMENTS!!!\n-> %s {config-file}\n", argv[0]);
-        return 1;
+        exit(1);
     }
 
     /* Read config file, and set "settings" */
     if (read_configfile(argv[1])!=0) {
-        exit(0);
+        exit(1);
+    }
+
+    if ( validate_settings()!=0 ) {
+        exit(1);
     }
 
     /* Create semaphore for log file */
@@ -110,6 +117,41 @@ int main(int argc, char *argv[]) {
     while (1) {}        // mantain open to manage the shared memory and semaphores
     return 0;
 }
+
+
+
+int validate_settings() {
+    /* Returns 0 if "settings" is up to code;
+     * Returns 1 if "settings" is wrongly configured, and prints to stderr what is wrong
+     */
+    int flag = 0;
+    if (settings.MOBILE_USERS <= 0) {
+        fprintf(stderr, "[ERROR_CONFIG]: {MOBILE_USERS} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.QUEUE_POS <= 0) {
+        fprintf(stderr, "[ERROR_CONFIG]: {QUEUE_POS} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.AUTH_SERVERS <= 0) {
+        fprintf(stderr, "[ERROR_CONFIG]: {AUTH_SERVERS} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.AUTH_PROC_TIME < 0) {
+        fprintf(stderr, "[ERROR_CONFIG]: {AUTH_PROC_TIME} must be >= 0\n");
+        flag = 1;
+    }
+    if (settings.MAX_VIDEO_WAIT <= 0) {
+        fprintf(stderr, "[ERROR_CONFIG]: {MAX_VIDEO_WAIT} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.MAX_OTHERS_WAIT <= 0) {
+        fprintf(stderr, "[ERROR_CONFIG]: {MAX_OTHERS_WAIT} must be >= 1\n");
+        flag = 1;
+    }
+    return flag;
+}
+
 
 
 

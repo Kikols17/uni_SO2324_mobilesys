@@ -23,6 +23,7 @@ typedef struct Settings {
 
 
 int validate_settings();
+
 int auth5g_register();
 int auth5g_request(char *req_type);
 
