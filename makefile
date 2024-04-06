@@ -23,7 +23,7 @@ mobile_user.o: mobile_user.c
 	gcc -Wall -Wextra -c mobile_user.c
 
 
-clear:
+clean:
 	rm -f *.o
 	rm -f 5g_auth_platform backoffice_user mobile_user
 	> log.txt
