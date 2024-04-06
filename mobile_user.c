@@ -22,6 +22,7 @@ typedef struct Settings {
 
 
 
+int validate_settings();
 int auth5g_register();
 int auth5g_request(char *req_type);
 
@@ -32,8 +33,9 @@ struct Settings settings;
 int requests_left;
 
 
+
 int main(int argc, char *argv[]) {
-    
+
     if (argc!=7) {
         printf("!!!INCORRECT ARGUMENTS!!!\n-> %s {plafond inicial}\n{número máximo de pedidos de autorização}\n{intervalo VIDEO} {intervalo MUSIC} {intervalo SOCIAL}\n{dados a reservar}\n", argv[0]);
         return 1;
@@ -52,12 +54,50 @@ int main(int argc, char *argv[]) {
 
     printf("Creating user:\n\tinitial plafond->%d\n\tmax requests->%d\n\tvideo interval->%d\n\tmusic interval->%d\n\tsocial interval->%d\n\trequest size->%d\n", settings.init_plafond, settings.max_request, settings.video_interval, settings.music_interval, settings.social_interval, settings.request_size);
 
+    if ( validate_settings() != 0 ) {
+        return 1;
+    }
+
 
     auth5g_register();
 
 
 
     return 0;
+}
+
+
+
+int validate_settings() {
+    /* Returns 0 if "settings" is up to code;
+     * Returns 1 if "settings" is wrongly configured, and prints to stderr what is wrong
+     */
+    int flag = 0;
+    if (settings.init_plafond <= 0) {
+        fprintf(stderr, "[ERROR_ARGS]: {plafond inicial} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.max_request <= 0) {
+        fprintf(stderr, "[ERROR_ARGS]: {número máximo de pedidos de autorização} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.video_interval <= 0) {
+        fprintf(stderr, "[ERROR_ARGS]: {intervalo VIDEO} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.music_interval <= 0) {
+        fprintf(stderr, "[ERROR_ARGS]: {intervalo MUSIC} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.social_interval <= 0) {
+        fprintf(stderr, "[ERROR_ARGS]: {intervalo SOCIAL} must be >= 1\n");
+        flag = 1;
+    }
+    if (settings.request_size <= 0) {
+        fprintf(stderr, "[ERROR_ARGS]: {dados a reservar} must be >= 1\n");
+        flag = 1;
+    }
+    return flag;
 }
 
 
