@@ -69,12 +69,14 @@ typedef struct User_data {
 sem_t *log_sem;
 struct Settings settings;
 int pid;
+int system_manager_pid;
 
 int shmid;
 User_data *user_array;
 
 int main(int argc, char *argv[]) {
-    pid = getpid();
+    system_manager_pid = getpid();
+    
     signal(SIGINT, sigint_handler);       // redirect ^C (ctrl+c) command
     if (argc!=2) {
         fprintf(stderr, "!!!INCORRECT ARGUMENTS!!!\n-> %s {config-file}\n", argv[0]);
@@ -89,7 +91,7 @@ int main(int argc, char *argv[]) {
     /* Create semaphore for log file */
     log_sem = sem_open("log_sem", O_CREAT, 0777, 1);
     if ( log_sem==SEM_FAILED ) {
-        fprintf(stderr, "ERROR CAN'T CREATING SEMAPHORE\n");
+        fprintf(stderr, "ERROR CAN'T CREATE SEMAPHORE\n");
         sigint_handler();
     }
 
@@ -101,11 +103,8 @@ int main(int argc, char *argv[]) {
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
     append_logfile("PROCESS SYSTEM_MANAGER CREATED");
 
-    // Create all 3 child proccess of the system
+    // Create child proccesses of the system
     parallel_AuthorizationRequestManager();
-    for (int i=0; i<settings.AUTH_SERVERS; i++) {
-        parallel_AuthorizationEngine(i+1);
-    }
     parallel_MonitorEngine();
 
     while (1) {}        // mantain open to manage the shared memory and semaphores
@@ -115,7 +114,7 @@ int main(int argc, char *argv[]) {
 
 
 void sigint_handler() {
-    if (pid!=0) {
+    if ( system_manager_pid==getpid() ) {
         /* If is father proccess (SYSTEM_MANAGER) */
         append_logfile("SIGNAL SIGINT RECEIVED");
         append_logfile("5G_AUTH_PLATFORM SIMULATOR WAITING FOR LAST TASKS TO FINISH");
@@ -215,6 +214,10 @@ int parallel_AuthorizationRequestManager() {
 
     pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
+
+    for (int i=0; i<settings.AUTH_SERVERS; i++) {
+        parallel_AuthorizationEngine(i+1);
+    }
 
     pthread_create(&reciever, NULL, receiver_ARM, NULL);
     pthread_create(&sender, NULL, sender_ARM, NULL);
