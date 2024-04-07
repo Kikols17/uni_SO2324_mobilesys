@@ -17,7 +17,16 @@
 #include <sys/shm.h>
 #include <time.h>
 
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <errno.h>
+
+
 #define LOG_FILE "log.txt"
+
+#define MOBILE_PIPE "mobile_pipe"
+#define BACKEND_PIPE "backend_pipe"
 
 #define BUF_SIZE 1024
 
@@ -81,6 +90,7 @@ int main(int argc, char *argv[]) {
     system_manager_pid = getpid();
 
     signal(SIGINT, sigint_handler);       // redirect ^C (ctrl+c) command
+    /* Verify correct amount of arguments */
     if (argc!=2) {
         fprintf(stderr, "!!!INCORRECT ARGUMENTS!!!\n-> %s {config-file}\n", argv[0]);
         exit(1);
@@ -91,6 +101,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    /* Verify that settings on config file are valid */
     if ( validate_settings()!=0 ) {
         exit(1);
     }
@@ -256,6 +267,20 @@ int parallel_AuthorizationRequestManager() {
 
     pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
+    
+    int backend_fd, mobile_fd;
+    if ( (mkfifo(BACKEND_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
+        // Creates the BACKEND named pipe if it doesn't exist yet
+        //perror("Cannot create pipe: ");
+        exit(0);
+    } else if ((backend_fd = open(BACKEND_PIPE, O_RDONLY)) < 0) {
+        // Opens BACKEND named pipe for reading
+        //perror("Cannot open pipe for reading: ");
+        exit(0);
+    } else {
+        append_logfile("BACKEND PIPE CREATED");
+    }
+    
 
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
         parallel_AuthorizationEngine(i+1);
@@ -317,7 +342,11 @@ int parallel_MonitorEngine() {
 void *receiver_ARM() {
     /* Reciever (AUTHORIZATION_REQUEST_MANAGER) */
     append_logfile("THREAD RECEIVER CREATED");
-    while (1) {}        // TODO[META1] make receiver
+    while (1) {
+        if (poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, 0)==1) {
+            /* data available */
+        }
+    }        // TODO[META1] make receiver
     return NULL;
 }
 

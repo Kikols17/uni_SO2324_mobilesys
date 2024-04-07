@@ -13,6 +13,9 @@
 
 #define BUF_SIZE 64
 
+#define MOBILE_PIPE "mobile_pipe"
+
+
 typedef struct Settings {
     int init_plafond;
     int max_request;
