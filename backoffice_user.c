@@ -17,8 +17,12 @@
 #define BACKEND_PIPE "/tmp/backend_pipe"
 
 
-int main() {
+int main(int argc, char *argv[]) {
     char buff_out[BUF_SIZE];            // Store messages to write to pipe
+
+    if (argc!=1) {
+        printf("!!!INCORRECT ARGUMENTS!!!\n-> %s\n", argv[0]);
+    }
 
 
     int backendpipe_fd;
