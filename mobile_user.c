@@ -13,7 +13,7 @@
 
 #define BUF_SIZE 64
 
-#define MOBILE_PIPE "mobile_pipe"
+#define MOBILE_PIPE "/tmp/mobile_pipe"
 
 
 typedef struct Settings {

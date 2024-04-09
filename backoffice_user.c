@@ -14,7 +14,7 @@
 
 #define BUF_SIZE 1024
 
-#define BACKEND_PIPE "backend_pipe"
+#define BACKEND_PIPE "/tmp/backend_pipe"
 
 
 int main() {

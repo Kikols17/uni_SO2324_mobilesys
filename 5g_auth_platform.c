@@ -25,8 +25,8 @@
 
 #define LOG_FILE "log.txt"
 
-#define MOBILE_PIPE "mobile_pipe"
-#define BACKEND_PIPE "backend_pipe"
+#define MOBILE_PIPE "/tmp/mobile_pipe"
+#define BACKEND_PIPE "/tmp/backend_pipe"
 
 #define BUF_SIZE 1024
 
@@ -271,15 +271,24 @@ int parallel_AuthorizationRequestManager() {
     int backend_fd, mobile_fd;
     if ( (mkfifo(BACKEND_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
         // Creates the BACKEND named pipe if it doesn't exist yet
-        //perror("Cannot create pipe: ");
-        exit(0);
-    } else if ((backend_fd = open(BACKEND_PIPE, O_RDONLY)) < 0) {
+        perror("Cannot create pipe: ");
+        exit(1);
+    } else if ((backend_fd = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
         // Opens BACKEND named pipe for reading
-        //perror("Cannot open pipe for reading: ");
-        exit(0);
-    } else {
-        append_logfile("BACKEND PIPE CREATED");
-    }
+        perror("Cannot open pipe for reading: ");
+        exit(1);
+    } else { append_logfile("BACKEND PIPE CREATED"); }
+
+    if ( (mkfifo(MOBILE_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
+        // Creates the BACKEND named pipe if it doesn't exist yet
+        perror("Cannot create pipe: ");
+        exit(1);
+    } else if ((backend_fd = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
+        // Opens BACKEND named pipe for reading
+        perror("Cannot open pipe for reading: ");
+        exit(1);
+    } else { append_logfile("MOBILEUSER PIPE CREATED"); }
+
     
 
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
@@ -339,18 +348,14 @@ int parallel_MonitorEngine() {
 
 
 
-void *receiver_ARM() {
+void *receiver_ARM( void *arg ) {
     /* Reciever (AUTHORIZATION_REQUEST_MANAGER) */
     append_logfile("THREAD RECEIVER CREATED");
-    while (1) {
-        if (poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, 0)==1) {
-            /* data available */
-        }
-    }        // TODO[META1] make receiver
+    while (1) {}        // TODO[META1] make receiver
     return NULL;
 }
 
-void *sender_ARM() {
+void *sender_ARM( void *arg ) {
     /* Sender (AUTHORIZATION_REQUEST_MANAGER) */
     append_logfile("THREAD SENDER CREATED");
     while (1) {}        // TODO[META1] make sender

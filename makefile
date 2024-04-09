@@ -25,6 +25,5 @@ mobile_user.o: mobile_user.c
 
 clean:
 	rm -f *.o
-	rm -f *_pipe
 	rm -f 5g_auth_platform backoffice_user mobile_user
 	> log.txt
