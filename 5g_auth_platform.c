@@ -262,18 +262,17 @@ int parallel_AuthorizationRequestManager() {
         return 0;
     }
 
-
     // if pid=0, child process, now authorization request manager
 
     pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
     
-    int backend_fd, mobile_fd;
+    int namedpipes[2];      // 0 for BACKENDPIPE; 1 for MOBILEPIPE;
     if ( (mkfifo(BACKEND_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
         // Creates the BACKEND named pipe if it doesn't exist yet
         perror("Cannot create pipe: ");
         exit(1);
-    } else if ((backend_fd = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
+    } else if ((namedpipes[0] = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
         // Opens BACKEND named pipe for reading
         perror("Cannot open pipe for reading: ");
         exit(1);
@@ -283,7 +282,7 @@ int parallel_AuthorizationRequestManager() {
         // Creates the BACKEND named pipe if it doesn't exist yet
         perror("Cannot create pipe: ");
         exit(1);
-    } else if ((backend_fd = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
+    } else if ((namedpipes[1] = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
         // Opens BACKEND named pipe for reading
         perror("Cannot open pipe for reading: ");
         exit(1);
@@ -295,7 +294,7 @@ int parallel_AuthorizationRequestManager() {
         parallel_AuthorizationEngine(i+1);
     }
 
-    pthread_create(&reciever, NULL, receiver_ARM, NULL);
+    pthread_create(&reciever, NULL, receiver_ARM, &namedpipes);
     pthread_create(&sender, NULL, sender_ARM, NULL);
     pthread_join(reciever, NULL);
     pthread_join(sender, NULL);
@@ -350,8 +349,22 @@ int parallel_MonitorEngine() {
 
 void *receiver_ARM( void *arg ) {
     /* Reciever (AUTHORIZATION_REQUEST_MANAGER) */
+    char inbuffer[BUF_SIZE];
+    int mobile_pipe_fd, backend_pipe_fd;
+
     append_logfile("THREAD RECEIVER CREATED");
-    while (1) {}        // TODO[META1] make receiver
+
+    mobile_pipe_fd = ((int*) arg)[0];
+    backend_pipe_fd = ((int*) arg)[1];
+    while (1) {
+        if (read(mobile_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
+            printf("[RECIEVED] MOBILE -> %s\n", inbuffer);
+        }
+
+        if (read(backend_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
+            printf("[RECIEVED] BACKEND -> %s\n", inbuffer);
+        }
+    }
     return NULL;
 }
 
