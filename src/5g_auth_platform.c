@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <semaphore.h>
@@ -58,9 +59,9 @@ int parallel_MonitorEngine();
  * RECEIVER: Used to recieve requests from mobile clients
  * SENDER: Used to send to Authorization_Engine's
  */
-void *receiver_ARM();
-void *sender_ARM();
-void check_message_queue(char *message);
+void *receiver_ARM( void *arg );
+void *sender_ARM( void *arg );
+int check_message_queue(char *message);
 
 
 
@@ -404,13 +405,15 @@ void *sender_ARM( void *arg ) {
 }
 
 //Funcao para verificar se a mensagem vai para a message queue de video ou de outros
-void check_message_queue(char *message) {
+int check_message_queue(char *message) {
     strtok(message, " ");
     char *token = strtok(NULL, " ");
     if (strcmp(token, "VIDEO") == 0) {
         //Mensagem vai para a message queue de video
-
+        return 1;
     } else {
         //Mensagem vai para a message queue de outros
+        return 0;
     }
+    return -1;
 }
