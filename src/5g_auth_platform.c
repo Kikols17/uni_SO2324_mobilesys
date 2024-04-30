@@ -97,6 +97,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    
     /* Read config file, and set "settings" */
     if (read_configfile(argv[1])!=0) {
         exit(1);
@@ -267,7 +268,7 @@ int parallel_AuthorizationRequestManager() {
         return 0;
     }
 
-    // if pid=0, child process, now authorization request manager
+    /* if pid=0, child process, now authorization request manager */
 
     pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
@@ -297,6 +298,9 @@ int parallel_AuthorizationRequestManager() {
         append_logfile("MOBILEUSER PIPE CREATED");
     }
 
+    // TODO create message queues
+    
+
     
 
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
@@ -308,7 +312,6 @@ int parallel_AuthorizationRequestManager() {
     pthread_join(reciever, NULL);
     pthread_join(sender, NULL);
 
-    while (1) {}        // TODO[META1] do AUTHORIZATION_REQUEST_MANAGER
     exit(0);
 }
 
