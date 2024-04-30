@@ -178,8 +178,12 @@ void sigint_handler() {
         sem_unlink("log_sem");      // } unlink and close log_sem
         shmdt(user_array);              // }
         shmctl(shmid, IPC_RMID, 0);     // } free shared memory
+    } else {
+        /* If is child proccess (ARM/AE/ME), send SIGINT to father */
+        sleep(0.5);
+        append_logfile("CHILD PROCESS TERMINATED");
+        kill(system_manager_pid, SIGINT);
     }
-    /* If is child proccess (ARM/AE/ME), simply terminate */
         
     exit(0);
 }
