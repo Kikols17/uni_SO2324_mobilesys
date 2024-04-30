@@ -16,6 +16,7 @@
 #include <sys/wait.h>
 #include <sys/shm.h>
 #include <time.h>
+#include <sys/select.h>
 
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -272,21 +273,25 @@ int parallel_AuthorizationRequestManager() {
         // Creates the BACKEND named pipe if it doesn't exist yet
         perror("Cannot create pipe: ");
         exit(1);
-    } else if ((namedpipes[0] = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
+    } else if ((namedpipes[0] = open(BACKEND_PIPE, O_RDWR)) < 0) {
         // Opens BACKEND named pipe for reading
         perror("Cannot open pipe for reading: ");
         exit(1);
-    } else { append_logfile("BACKEND PIPE CREATED"); }
+    } else {
+        append_logfile("BACKEND PIPE CREATED");
+    }
 
     if ( (mkfifo(MOBILE_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
         // Creates the BACKEND named pipe if it doesn't exist yet
         perror("Cannot create pipe: ");
         exit(1);
-    } else if ((namedpipes[1] = open(BACKEND_PIPE, O_RDONLY | O_NONBLOCK)) < 0) {
+    } else if ((namedpipes[1] = open(MOBILE_PIPE, O_RDWR)) < 0) {
         // Opens BACKEND named pipe for reading
         perror("Cannot open pipe for reading: ");
         exit(1);
-    } else { append_logfile("MOBILEUSER PIPE CREATED"); }
+    } else {
+        append_logfile("MOBILEUSER PIPE CREATED");
+    }
 
     
 
@@ -354,15 +359,30 @@ void *receiver_ARM( void *arg ) {
 
     append_logfile("THREAD RECEIVER CREATED");
 
-    mobile_pipe_fd = ((int*) arg)[0];
-    backend_pipe_fd = ((int*) arg)[1];
-    while (1) {
-        if (read(mobile_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
-            printf("[RECIEVED] MOBILE -> %s\n", inbuffer);
-        }
+    backend_pipe_fd = ((int*) arg)[0];
+    mobile_pipe_fd = ((int*) arg)[1];
 
-        if (read(backend_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
-            printf("[RECIEVED] BACKEND -> %s\n", inbuffer);
+    fd_set readfds;
+    while (1) {
+        // Set FD_SET to read from backend_pipe_fd and mobile_pipe_fd
+        FD_ZERO(&readfds);
+        FD_SET(backend_pipe_fd, &readfds);
+        FD_SET(mobile_pipe_fd, &readfds);
+
+        // Wait until something is written to one of the pipes
+        if ( select(mobile_pipe_fd+1, &readfds, NULL, NULL, NULL)>0 ) {
+            if (FD_ISSET(backend_pipe_fd, &readfds)) {
+                // If is written to backend_pipe_fd
+                if (read(backend_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
+                    printf("[RECEIVED] BACKEND -> %s\n", inbuffer);
+                }
+            }
+            if (FD_ISSET(mobile_pipe_fd, &readfds)) {
+                // If is written to mobile_pipe_fd
+                if (read(mobile_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
+                    printf("[RECEIVED] MOBILE -> %s\n", inbuffer);
+                }
+            }
         }
     }
     return NULL;
