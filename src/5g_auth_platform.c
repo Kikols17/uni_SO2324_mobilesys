@@ -60,6 +60,7 @@ int parallel_MonitorEngine();
  */
 void *receiver_ARM();
 void *sender_ARM();
+void check_message_queue(char *message);
 
 
 
@@ -400,4 +401,16 @@ void *sender_ARM( void *arg ) {
     append_logfile("THREAD SENDER CREATED");
     while (1) {}        // TODO[META1] make sender
     return NULL;
+}
+
+//Funcao para verificar se a mensagem vai para a message queue de video ou de outros
+void check_message_queue(char *message) {
+    strtok(message, " ");
+    char *token = strtok(NULL, " ");
+    if (strcmp(token, "VIDEO") == 0) {
+        //Mensagem vai para a message queue de video
+
+    } else {
+        //Mensagem vai para a message queue de outros
+    }
 }
