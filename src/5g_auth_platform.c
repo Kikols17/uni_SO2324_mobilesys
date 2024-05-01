@@ -41,7 +41,11 @@ int append_logfile(char *log_info);
 int read_configfile(char *configfile);
 
 // Handle SIGINT signal (^C), closing all processes cleanly, and freeing shared memory
-void sigint_handler();
+void system_panic();
+void close_system_manager(int sigint);
+void close_monitor_engine();
+void close_authorization_request_manager();
+void close_authorization_engine();
 
 // Create shared memory
 int create_sharedmem();
@@ -61,6 +65,8 @@ int parallel_MonitorEngine();
  */
 void *receiver_ARM( void *arg );
 void *sender_ARM( void *arg );
+
+/* Utils */
 int check_message_queue(char *message);
 
 
@@ -89,10 +95,15 @@ int system_manager_pid;
 int shmid;
 User_data *user_array;
 
+int child_count;
+int *child_pids;
+
+
 int main(int argc, char *argv[]) {
     system_manager_pid = getpid();
 
-    signal(SIGINT, sigint_handler);       // redirect ^C (ctrl+c) command
+    signal(SIGINT, close_system_manager);           // redirect ^C (ctrl+c) command
+    signal(SIGQUIT, close_system_manager);          // redirect ^\ (ctrl+\) command, and handle panic
     /* Verify correct amount of arguments */
     if (argc!=2) {
         fprintf(stderr, "!!!INCORRECT ARGUMENTS!!!\n-> %s {config-file}\n", argv[0]);
@@ -110,16 +121,20 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    // create child_pids with size settings.AUTH_SERVERS
+    child_count = 0;
+    child_pids = (int*) malloc(sizeof(int) * settings.AUTH_SERVERS);
+
     /* Create semaphore for log file */
     log_sem = sem_open("log_sem", O_CREAT, 0777, 1);
     if ( log_sem==SEM_FAILED ) {
         fprintf(stderr, "ERROR CAN'T CREATE SEMAPHORE\n");
-        sigint_handler();
+        system_panic(-1);
     }
 
     /* Create shared memory */
     if ( create_sharedmem()!=0 ) {
-        sigint_handler();
+        system_panic(-1);
     }
 
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
@@ -169,27 +184,68 @@ int validate_settings() {
 
 
 
+void system_panic() {
+    /* Can be called by any process to make SYSTEM_MANAGER panic, and stop all operations */
+    kill(system_manager_pid, SIGQUIT);
+}
 
-void sigint_handler() {
-    if ( system_manager_pid==getpid() ) {
-        /* If is father proccess (SYSTEM_MANAGER) */
+void close_system_manager(int sigint) {
+    /* Used to close SYSTEM_MANAGER (and all child processes) */
+    if (sigint==SIGINT) {
         append_logfile("SIGNAL SIGINT RECEIVED");
-        append_logfile("5G_AUTH_PLATFORM SIMULATOR WAITING FOR LAST TASKS TO FINISH");
-        wait(NULL);
-        append_logfile("5G_AUTH_PLATFORM SIMULATOR CLOSING\n+----------------------------------------------------------------------+");
-        sem_close(log_sem);         // }
-        sem_unlink("log_sem");      // } unlink and close log_sem
-        shmdt(user_array);              // }
-        shmctl(shmid, IPC_RMID, 0);     // } free shared memory
+    } else if (sigint==SIGQUIT) {
+        append_logfile("SIGQUIT (possibly panic) SIGNAL RECEIVED");
     } else {
-        /* If is child proccess (ARM/AE/ME), send SIGINT to father */
-        sleep(0.5);
-        append_logfile("CHILD PROCESS TERMINATED");
-        kill(system_manager_pid, SIGINT);
+        append_logfile("UNKNOWN SIGNAL RECEIVED");
     }
-        
+    
+    append_logfile("5G_AUTH_PLATFORM SIMULATOR WAITING FOR LAST TASKS TO FINISH");
+    for (int i=0; i<child_count; i++) {             // }
+        kill(child_pids[i], SIGQUIT);               // } kill all child processes with sigint
+        waitpid(child_pids[i], NULL, 0);            // } and wait for said processes to finish
+    }                                               // }
+
+    append_logfile("5G_AUTH_PLATFORM SIMULATOR CLOSING\n"
+                   "+----------------------------------------------------------------------+");
+    sem_close(log_sem);         // }
+    sem_unlink("log_sem");      // } unlink and close log_sem
+    shmdt(user_array);              // }
+    shmctl(shmid, IPC_RMID, 0);     // } free shared memory
+
+    // TODO close message queue
+
     exit(0);
 }
+
+void close_monitor_engine() {
+    /* Used to close MONITOR_ENGINE */
+    append_logfile("MONITOR_ENGINE CLOSING");
+
+    exit(0);
+}
+
+void close_authorization_request_manager() {
+    /* Used to close AUTHORIZATION_REQUEST_MANAGER */
+    append_logfile("AUTHORIZATION_REQUEST_MANAGER WAITING FOR LAST TASKS TO FINISH");
+    for (int i=0; i<settings.AUTH_SERVERS; i++) {   // }
+        kill(child_pids[i], SIGQUIT);               // } kill all child processes with sigint
+        waitpid(child_pids[i], NULL, 0);            // } and wait for said processes to finish
+    }                                               // }
+
+    append_logfile("AUTHORIZATION_REQUEST_MANAGER CLOSING");
+
+    exit(0);
+}
+
+void close_authorization_engine() {
+    /* Used to close AUTHORIZATION_ENGINE */
+    append_logfile("AUTHORIZATION_ENGINE CLOSING");
+    // TODO close unnamed pipe
+
+    exit(0);
+}
+
+
 
 int create_sharedmem() {
     /* Create sharedmemory (user_array) */
@@ -266,9 +322,14 @@ int parallel_AuthorizationRequestManager() {
         append_logfile("[ERROR] FAILED TO CREATE PROCESS AUTHORIZATION_REQUEST_MANAGER");
         return 1;
     } else if (pid!=0) {
-        // if pid=0, parent process, return
+        // if pid=0, parent process, save child pid to child_pids and return
+        child_pids[child_count] = pid;
+        child_count++;
         return 0;
     }
+    child_count = 0;    // new process, no children
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, close_authorization_request_manager);
 
     /* if pid=0, child process, now authorization request manager */
 
@@ -325,9 +386,14 @@ int parallel_AuthorizationEngine(int n) {
         append_logfile("[ERROR] FAILED TO CREATE PROCESS AUTHORIZATION_ENGINE");
         return 1;
     } else if (pid!=0) {
-        // if pid=0, parent process, return
+        // if pid=0, parent process, save child pid to child_pids and return
+        child_pids[child_count] = pid;
+        child_count++;
         return 0;
     }
+    child_count = 0;        // new process, no children
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, close_authorization_engine);
 
 
     // if pid=0, child process, now authorization engine
@@ -348,10 +414,14 @@ int parallel_MonitorEngine() {
         append_logfile("[ERROR] FAILED TO CREATE PROCESS MONITOR_ENGINE");
         return 1;
     } else if (pid!=0) {
-        // if pid=0, parent process, return
+        // if pid=0, parent process, save child pid to child_pids and return
+        child_pids[child_count] = pid;
+        child_count++;
         return 0;
     }
-
+    child_count = 0;        // new process, no children
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, close_monitor_engine);
 
     // if pid=0, child process, now monitor engine
     append_logfile("PROCESS MONITOR_ENGINE CREATED");
