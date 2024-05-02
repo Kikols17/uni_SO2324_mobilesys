@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
+
+#include <pthread.h>
+#include <semaphore.h>
 
 
 #define BUF_SIZE 64
@@ -23,9 +27,16 @@ typedef struct Settings {
     int request_size;
 } Settings;
 
+typedef struct Request {
+    char *req_type;
+    int interval;
+} Request;
+
 
 
 int validate_settings();
+
+void *timed_request(void *req_type);
 
 int auth5g_register();
 int auth5g_request(char *req_type);
@@ -35,6 +46,10 @@ int auth5g_request(char *req_type);
 // Hold all the settings for this mobile user
 struct Settings settings;
 int requests_left;
+
+int mobilepipe_fd;
+
+sem_t sem_request;
 
 
 
@@ -62,8 +77,27 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    if ((mobilepipe_fd = open(MOBILE_PIPE, O_WRONLY)) < 0) {
+        perror("[ERROR]: Cannot open pipe for writing");
+        exit(0);
+    }
 
-    auth5g_register();
+
+    if (auth5g_register()!=0) {
+        return -1;
+    }
+
+    pthread_t requesters[3];
+    struct Request video_req = {"VIDEO", settings.video_interval};
+    struct Request music_req = {"MUSIC", settings.music_interval};
+    struct Request social_req = {"SOCIAL", settings.social_interval};
+    pthread_create(&requesters[0], NULL, timed_request, &video_req);
+    pthread_create(&requesters[1], NULL, timed_request, &music_req);
+    pthread_create(&requesters[2], NULL, timed_request, &social_req);
+
+    pthread_join(requesters[0], NULL);
+    pthread_join(requesters[1], NULL);
+    pthread_join(requesters[2], NULL);
 
 
 
@@ -105,22 +139,41 @@ int validate_settings() {
 }
 
 
+void *timed_request(void *req_type) {
+    struct Request *req = (struct Request *) req_type;
+    while (1) {
+        sleep(req->interval);
+        if (auth5g_request(req->req_type)!=0) {
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
 
 int auth5g_register() {
     char buff_out[BUF_SIZE];
     sprintf(buff_out, "%d#%d", getpid(), settings.init_plafond);
     fprintf(stdout, "[REGISTER]: \"%s\"\n", buff_out);
+    if ( write(mobilepipe_fd, &buff_out, sizeof(buff_out))==0 ) {
+        fprintf(stderr, "[ERROR]: Cannot write to \"%s\" pipe\n", MOBILE_PIPE);
+        return -1;
+    }
     return 0;
 }
-
 
 int auth5g_request(char *req_type) {
     char buff_out[BUF_SIZE];
     if (requests_left==0) {
+        printf("no requests left\n");
         return 1;
     }
     sprintf(buff_out, "%d#%s#%d", getpid(), req_type, settings.request_size);
     fprintf(stdout, "[REQUEST]: \"%s\"\n", buff_out);
+    if ( write(mobilepipe_fd, &buff_out, sizeof(buff_out))==0 ) {
+        fprintf(stderr, "[ERROR]: Cannot write to \"%s\" pipe\n", MOBILE_PIPE);
+        return -1;
+    }
     requests_left--;
     return 0;
 }
