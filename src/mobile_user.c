@@ -36,7 +36,7 @@ typedef struct Request {
 
 int validate_settings();
 
-void *timed_request(void *req_type);
+void *timed_request(void *req_p);
 
 int auth5g_register();
 int auth5g_request(char *req_type);
@@ -56,7 +56,7 @@ sem_t sem_request;
 int main(int argc, char *argv[]) {
 
     if (argc!=7) {
-        printf("!!!INCORRECT ARGUMENTS!!!\n-> %s {plafond inicial}\n{número máximo de pedidos de autorização}\n{intervalo VIDEO} {intervalo MUSIC} {intervalo SOCIAL}\n{dados a reservar}\n", argv[0]);
+        fprintf(stdout, "!!!INCORRECT ARGUMENTS!!!\n-> %s {plafond inicial}\n{número máximo de pedidos de autorização}\n{intervalo VIDEO} {intervalo MUSIC} {intervalo SOCIAL}\n{dados a reservar}\n", argv[0]);
         return 1;
     }
 
@@ -71,14 +71,14 @@ int main(int argc, char *argv[]) {
     settings.request_size = atoi(argv[6]);
 
 
-    printf("Creating user:\n\tinitial plafond->%d\n\tmax requests->%d\n\tvideo interval->%d\n\tmusic interval->%d\n\tsocial interval->%d\n\trequest size->%d\n", settings.init_plafond, settings.max_request, settings.video_interval, settings.music_interval, settings.social_interval, settings.request_size);
+    fprintf(stdout, "Creating user:\n\tinitial plafond->%d\n\tmax requests->%d\n\tvideo interval->%d\n\tmusic interval->%d\n\tsocial interval->%d\n\trequest size->%d\n", settings.init_plafond, settings.max_request, settings.video_interval, settings.music_interval, settings.social_interval, settings.request_size);
 
     if ( validate_settings() != 0 ) {
         return 1;
     }
 
     if ((mobilepipe_fd = open(MOBILE_PIPE, O_WRONLY)) < 0) {
-        perror("[ERROR]: Cannot open pipe for writing");
+        fprintf(stderr, "[ERROR]: Cannot open pipe for writing");
         exit(0);
     }
 
@@ -139,8 +139,8 @@ int validate_settings() {
 }
 
 
-void *timed_request(void *req_type) {
-    struct Request *req = (struct Request *) req_type;
+void *timed_request(void *req_p) {
+    struct Request *req = (struct Request *) req_p;
     while (1) {
         sleep(req->interval);
         if (auth5g_request(req->req_type)!=0) {
@@ -165,7 +165,7 @@ int auth5g_register() {
 int auth5g_request(char *req_type) {
     char buff_out[BUF_SIZE];
     if (requests_left==0) {
-        printf("no requests left\n");
+        fprintf(stdout, "no requests left\n");
         return 1;
     }
     sprintf(buff_out, "%d#%s#%d", getpid(), req_type, settings.request_size);
