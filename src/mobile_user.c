@@ -100,13 +100,13 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    pthread_t requesters[3];
-    pthread_t messagereciever;
+    pthread_t requesters[3], messagereciever;
+
     struct Request video_req = {"VIDEO", settings.video_interval};
-    struct Request music_req = {"MUSIC", settings.music_interval};
-    struct Request social_req = {"SOCIAL", settings.social_interval};
     pthread_create(&requesters[0], NULL, timed_request, &video_req);
+    struct Request music_req = {"MUSIC", settings.music_interval};
     pthread_create(&requesters[1], NULL, timed_request, &music_req);
+    struct Request social_req = {"SOCIAL", settings.social_interval};
     pthread_create(&requesters[2], NULL, timed_request, &social_req);
     pthread_create(&messagereciever, NULL, messagequeue_response, NULL);
 
@@ -114,7 +114,6 @@ int main(int argc, char *argv[]) {
     pthread_join(requesters[1], NULL);
     pthread_join(requesters[2], NULL);
     pthread_cancel(messagereciever);        // kill messagereciever when all requesters are done
-
 
 
     return 0;
