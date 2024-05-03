@@ -11,6 +11,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
 #include <pthread.h>
 #include <semaphore.h>
 
@@ -41,6 +45,7 @@ typedef struct Request {
 int validate_settings();
 
 void *timed_request(void *req_p);
+void *messagequeue_response();
 
 int auth5g_register();
 int auth5g_request(char *req_type);
@@ -52,8 +57,7 @@ struct Settings settings;
 int requests_left;
 
 int mobilepipe_fd;
-
-sem_t sem_request;
+int message_queue_id;
 
 
 
@@ -83,7 +87,12 @@ int main(int argc, char *argv[]) {
 
     if ((mobilepipe_fd = open(MOBILE_PIPE, O_WRONLY)) < 0) {
         fprintf(stderr, "[ERROR]: Cannot open pipe for writing");
-        exit(0);
+        exit(1);
+    }
+
+    if ( (message_queue_id = msgget(MESSAGE_QUEUE, 0666)) < 0 ) {
+        fprintf(stderr, "[ERROR]: Cannot open message queue");
+        exit(2);
     }
 
 
@@ -92,16 +101,19 @@ int main(int argc, char *argv[]) {
     }
 
     pthread_t requesters[3];
+    pthread_t messagereciever;
     struct Request video_req = {"VIDEO", settings.video_interval};
     struct Request music_req = {"MUSIC", settings.music_interval};
     struct Request social_req = {"SOCIAL", settings.social_interval};
     pthread_create(&requesters[0], NULL, timed_request, &video_req);
     pthread_create(&requesters[1], NULL, timed_request, &music_req);
     pthread_create(&requesters[2], NULL, timed_request, &social_req);
+    pthread_create(&messagereciever, NULL, messagequeue_response, NULL);
 
     pthread_join(requesters[0], NULL);
     pthread_join(requesters[1], NULL);
     pthread_join(requesters[2], NULL);
+    pthread_cancel(messagereciever);        // kill messagereciever when all requesters are done
 
 
 
@@ -151,6 +163,20 @@ void *timed_request(void *req_p) {
         if (auth5g_request(req->type)!=0) {
             return NULL;
         }
+    }
+    return NULL;
+}
+
+void *messagequeue_response() {
+    /* Thread that reads the message queue */
+    message msg_in;
+
+    while (1) {
+        if (msgrcv(message_queue_id, &msg_in, sizeof(msg_in), getpid(), 0) < 0) {
+            fprintf(stderr, "[ERROR]: Cannot read from message queue\n");
+            exit(2);
+        }
+        printf("RECEIVED: \"%s\"\n", msg_in.mtext);
     }
     return NULL;
 }

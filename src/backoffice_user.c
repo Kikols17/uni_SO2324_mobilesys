@@ -113,7 +113,7 @@ void *messagequeue_response() {
 
     while (1) {
         if (msgrcv(message_queue_id, &msg_in, sizeof(msg_in), getpid(), 0) < 0) {
-            fprintf(stderr, "[ERROR]: Cannot read from message queue");
+            fprintf(stderr, "[ERROR]: Cannot read from message queue\n");
             exit(2);
         }
         printf("RECEIVED: \"%s\"\n", msg_in.mtext);

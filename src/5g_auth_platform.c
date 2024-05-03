@@ -465,8 +465,6 @@ void *receiver_ARM( void *arg ) {
     mobile_pipe_fd = ((int*) arg)[1];
 
     fd_set readfds;
-    message msg;
-    char *token;
     while (1) {
         // Set FD_SET to read from backend_pipe_fd and mobile_pipe_fd
         FD_ZERO(&readfds);
