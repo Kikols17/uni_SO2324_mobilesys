@@ -15,9 +15,11 @@
 #include <semaphore.h>
 
 
-#define BUF_SIZE 64
 
 #define MOBILE_PIPE "/tmp/mobile_pipe"
+
+#define BUF_SIZE 64
+#define MESSAGE_QUEUE 1234
 
 
 typedef struct Settings {

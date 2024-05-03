@@ -22,6 +22,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
 #include <errno.h>
 
 
@@ -31,6 +35,7 @@
 #define BACKEND_PIPE "/tmp/backend_pipe"
 
 #define BUF_SIZE 1024
+#define MESSAGE_QUEUE 1234
 
 
 // Verify that "settings"' values are valid
@@ -96,8 +101,12 @@ int system_manager_pid;
 int shmid;
 User_data *user_array;
 
+// Store child pids of the given process
 int child_count;
 int *child_pids;
+
+// Message queue
+int message_queue_id;
 
 
 int main(int argc, char *argv[]) {
@@ -122,9 +131,12 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // create child_pids with size settings.AUTH_SERVERS
+    /* Create "child_pids" with size settings.AUTH_SERVERS */
     child_count = 0;
     child_pids = (int*) malloc(sizeof(int) * settings.AUTH_SERVERS);
+
+    /* Create message queue */
+    message_queue_id = msgget(MESSAGE_QUEUE, IPC_CREAT | 0777);
 
     /* Create semaphore for log file */
     log_sem = sem_open("log_sem", O_CREAT, 0777, 1);
@@ -206,14 +218,15 @@ void close_system_manager(int sigint) {
         waitpid(child_pids[i], NULL, 0);            // } and wait for said processes to finish
     }                                               // }
 
+    /* Close message queue */
+    msgctl(message_queue_id, IPC_RMID, 0);
+
     append_logfile("5G_AUTH_PLATFORM SIMULATOR CLOSING\n"
                    "+----------------------------------------------------------------------+");
     sem_close(log_sem);         // }
     sem_unlink("log_sem");      // } unlink and close log_sem
     shmdt(user_array);              // }
     shmctl(shmid, IPC_RMID, 0);     // } free shared memory
-
-    // TODO close message queue
 
     exit(0);
 }

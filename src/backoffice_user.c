@@ -12,9 +12,10 @@
 #include <fcntl.h>
 
 
-#define BUF_SIZE 1024
-
 #define BACKEND_PIPE "/tmp/backend_pipe"
+
+#define BUF_SIZE 1024
+#define MESSAGE_QUEUE 1234
 
 
 int auth5g_request(char *req_type);
