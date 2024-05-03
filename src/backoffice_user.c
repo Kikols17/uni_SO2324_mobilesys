@@ -17,11 +17,15 @@
 
 #include <pthread.h>
 
+#include "message_struct.c"
+
 
 #define BACKEND_PIPE "/tmp/backend_pipe"
 
 #define BUF_SIZE 1024
 #define MESSAGE_QUEUE 1234
+
+
 
 
 int auth5g_request(char *req_type);
@@ -97,18 +101,18 @@ void *user_input() {
 
 void *backend_response() {
     /* Thread that reads the message queue */
-    char buff_in[BUF_SIZE];             // Store messages read from pipe
+    message msg_in;
 
     if ( (message_queue_id = msgget(MESSAGE_QUEUE, 0666)) < 0 ) {
         fprintf(stderr, "[ERROR]: Cannot open message queue");
         exit(0);
     }
     while (1) {
-        if (msgrcv(message_queue_id, &buff_in, sizeof(buff_in), getpid(), 0) < 0) {
+        if (msgrcv(message_queue_id, &msg_in, sizeof(msg_in), getpid(), 0) < 0) {
             fprintf(stderr, "[ERROR]: Cannot read from message queue");
             exit(0);
         }
-        printf("RECEIVED: \"%s\"\n", buff_in);
+        printf("RECEIVED: \"%s\"\n", msg_in.mtext);
     }
     return NULL;
 }

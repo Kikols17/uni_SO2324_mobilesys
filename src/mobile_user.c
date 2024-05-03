@@ -14,11 +14,13 @@
 #include <pthread.h>
 #include <semaphore.h>
 
+#include "message_struct.c"
+
 
 
 #define MOBILE_PIPE "/tmp/mobile_pipe"
 
-#define BUF_SIZE 64
+#define BUF_SIZE 1024
 #define MESSAGE_QUEUE 1234
 
 

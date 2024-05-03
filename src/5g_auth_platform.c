@@ -28,6 +28,8 @@
 
 #include <errno.h>
 
+#include "message_struct.c"
+
 
 #define LOG_FILE "log.txt"
 
@@ -90,11 +92,6 @@ typedef struct User_data {
     int id;
     int plafond_left;
 } User_data;
-
-typedef struct message {
-    long mtype;
-    char mtext[BUF_SIZE];
-} message;
 
 
 
