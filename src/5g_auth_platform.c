@@ -91,6 +91,11 @@ typedef struct User_data {
     int plafond_left;
 } User_data;
 
+typedef struct message {
+    long mtype;
+    char mtext[BUF_SIZE];
+} message;
+
 
 
 sem_t *log_sem;
