@@ -60,6 +60,7 @@ int main(int argc, char *argv[]) {
 
 
 int auth5g_request(char *req_type) {
+    /* Make request of type "req_type" */
     char buff_out[BUF_SIZE];            // Store messages to write to pipe
 
     sprintf(buff_out, "%d#%s", getpid(), req_type);

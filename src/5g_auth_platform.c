@@ -87,6 +87,7 @@ typedef struct User_data {
 } User_data;
 
 
+
 sem_t *log_sem;
 struct Settings settings;
 int pid;
@@ -232,6 +233,12 @@ void close_authorization_request_manager() {
         waitpid(child_pids[i], NULL, 0);            // } and wait for said processes to finish
     }                                               // }
 
+    // close named pipes
+    unlink(BACKEND_PIPE);
+    unlink(MOBILE_PIPE);
+
+    // [TODO] close message queues
+
     append_logfile("AUTHORIZATION_REQUEST_MANAGER CLOSING");
 
     exit(0);
@@ -240,6 +247,7 @@ void close_authorization_request_manager() {
 void close_authorization_engine() {
     /* Used to close AUTHORIZATION_ENGINE */
     append_logfile("AUTHORIZATION_ENGINE CLOSING");
+
     // TODO close unnamed pipe
 
     exit(0);
@@ -474,10 +482,11 @@ void *sender_ARM( void *arg ) {
     return NULL;
 }
 
-//Funcao para verificar se a mensagem vai para a message queue de video ou de outros
+
 int check_message_queue(char *message) {
-    strtok(message, " ");
-    char *token = strtok(NULL, " ");
+    /* Funcao para verificar se a mensagem vai para a message queue de video ou de outros */
+    strtok(message, "#");
+    char *token = strtok(NULL, "#");
     if (strcmp(token, "VIDEO") == 0) {
         //Mensagem vai para a message queue de video
         return 1;

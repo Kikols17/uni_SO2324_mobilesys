@@ -28,7 +28,7 @@ typedef struct Settings {
 } Settings;
 
 typedef struct Request {
-    char *req_type;
+    char *type;
     int interval;
 } Request;
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
 
 int validate_settings() {
     /* Returns 0 if "settings" is up to code;
-     * Returns 1 if "settings" is wrongly configured, and prints to stderr what is wrong
+     * Returns 1 if "settings" is wrongly configured, and prints to stderr what is wrong;
      */
     int flag = 0;
     if (settings.init_plafond <= 0) {
@@ -140,10 +140,11 @@ int validate_settings() {
 
 
 void *timed_request(void *req_p) {
+    /* Make requests of type "req->type" with interval "req->interval" */
     struct Request *req = (struct Request *) req_p;
     while (1) {
         sleep(req->interval);
-        if (auth5g_request(req->req_type)!=0) {
+        if (auth5g_request(req->type)!=0) {
             return NULL;
         }
     }
@@ -152,6 +153,14 @@ void *timed_request(void *req_p) {
 
 
 int auth5g_register() {
+    /* Register on the 5g_auth system 
+     *
+     * Return:
+     *      0 if successful
+     *      -1 if writing failed
+     * 
+     * Register format: "{pid}#{plafond}"
+     */
     char buff_out[BUF_SIZE];
     sprintf(buff_out, "%d#%d", getpid(), settings.init_plafond);
     fprintf(stdout, "[REGISTER]: \"%s\"\n", buff_out);
@@ -163,6 +172,15 @@ int auth5g_register() {
 }
 
 int auth5g_request(char *req_type) {
+    /* Make request of type "req_type"
+     *
+     * Return:
+     *      0 if successful
+     *      1 if no requests left
+     *      -1 if failed
+     *
+     * Request format: "{pid}#{req_type}#{request_size}"
+     */
     char buff_out[BUF_SIZE];
     if (requests_left==0) {
         fprintf(stdout, "no requests left\n");
