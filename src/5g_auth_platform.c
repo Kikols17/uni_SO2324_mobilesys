@@ -110,9 +110,15 @@ int *child_pids;
 // Message queue
 int message_queue_id;
 
+// process name stuff
+int max_processname_size;
+char *process_name;
+
 
 int main(int argc, char *argv[]) {
     system_manager_pid = getpid();
+    process_name = argv[0];
+    max_processname_size = strlen(process_name);
 
     signal(SIGINT, close_system_manager);           // redirect ^C (ctrl+c) command
     signal(SIGQUIT, close_system_manager);          // redirect ^\ (ctrl+\) command, and handle panic
@@ -154,6 +160,9 @@ int main(int argc, char *argv[]) {
 
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
     append_logfile("PROCESS SYSTEM_MANAGER CREATED");
+
+    memset(process_name, '\0', max_processname_size);   // }
+    strcpy(process_name, "SYSTEM_MANAGER");             // } change process name to SYSTEM_MAN
 
     // Create child proccesses of the system
     parallel_AuthorizationRequestManager();
@@ -350,6 +359,8 @@ int parallel_AuthorizationRequestManager() {
         child_count++;
         return 0;
     }
+    memset(process_name, '\0', max_processname_size);   // }
+    strcpy(process_name, "AUTH_REQ_MANAGER");           // } change process name to ARM
     child_count = 0;    // new process, no children
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_request_manager);
@@ -414,6 +425,8 @@ int parallel_AuthorizationEngine(int n) {
         child_count++;
         return 0;
     }
+    memset(process_name, '\0', max_processname_size);   // }
+    strcpy(process_name, "AUTH_ENGINE");                // } change process name to AE
     child_count = 0;        // new process, no children
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_engine);
@@ -442,6 +455,8 @@ int parallel_MonitorEngine() {
         child_count++;
         return 0;
     }
+    memset(process_name, '\0', max_processname_size);   // }
+    strcpy(process_name, "MONITOR_ENGINE");             // } change process name to ME
     child_count = 0;        // new process, no children
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_monitor_engine);
