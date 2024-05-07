@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
+#include <unistd.h>
+
 #include "message_queue_struct.h"
 #include "message_queue_struct.c"
 
@@ -17,8 +19,10 @@ void *write_to_queue(void *arg) {
     message_queue *mq = (message_queue *)arg;
     char msg[BUF_SIZE];
     for (int i = 0; i < QUEUE_SIZE; i++) {
+	sleep(rand()%5);
         sprintf(msg, "Message %d", i);
         while (write_message_queue(mq, msg) == 1); // Keep trying until message is written
+	printf("Write: %s\n", msg);
     }
     return NULL;
 }
@@ -27,6 +31,7 @@ void *read_from_queue(void *arg) {
     message_queue *mq = (message_queue *)arg;
     char msg[BUF_SIZE];
     for (int i = 0; i < QUEUE_SIZE; i++) {
+	sleep(rand()%10);
         while (read_message_queue(mq, msg) == 1); // Keep trying until message is read
         printf("Read: %s\n", msg);
     }
