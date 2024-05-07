@@ -381,7 +381,6 @@ int parallel_AuthorizationRequestManager() {
     q[1] = create_queue(settings.QUEUE_POS, BUF_SIZE);
 
     
-
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
         parallel_AuthorizationEngine(i+1);
     }
@@ -521,15 +520,16 @@ void *sender_ARM( void *arg ) {
 }
 
 
-int check_message_queue(char *message) {
-    /* Funcao para verificar se a mensagem vai para a message queue de video ou de outros */
-    strtok(message, "#");
+int check_requesttype(char *request) {
+    /* Funcao para verificar se a request vai para a queue de video ou de outros */
+    char *copy = strdup(request);
+    strtok(copy, "#");
     char *token = strtok(NULL, "#");
     if (strcmp(token, "VIDEO") == 0) {
-        //Mensagem vai para a message queue de video
+        //Mensagem vai para a queue de video
         return 1;
     } else {
-        //Mensagem vai para a message queue de outros
+        //Mensagem vai para a queue de outros
         return 0;
     }
     return -1;
