@@ -7,7 +7,7 @@
 
 #include <pthread.h>
 
-typedef struct message_queue {
+typedef struct queue {
     char **queue;
     int size;
     int buf_size;
@@ -15,14 +15,14 @@ typedef struct message_queue {
     int read_index;
     int write_index;
     int count;          // Number of messages in the queue
-} message_queue;
+} queue;
 
 
-message_queue *create_message_queue(int size, int buf_size);
-void destroy_message_queue(message_queue *mq);
+queue *create_queue(int size, int buf_size);
+void destroy_queue(queue *q);
 
 
-int write_message_queue(message_queue *mq, char *msg);
-int read_message_queue(message_queue *mq, char *msg);
+int write_queue(queue *q, char *msg);
+int read_queue(queue *q, char *msg);
 
 #endif
