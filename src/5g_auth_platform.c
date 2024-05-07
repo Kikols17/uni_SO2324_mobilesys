@@ -29,6 +29,7 @@
 #include <errno.h>
 
 #include "message_struct.c"
+#include "queue_struct.c"
 
 
 #define MAX(a,b) (((a)>(b))?(a):(b))
@@ -399,8 +400,10 @@ int parallel_AuthorizationRequestManager() {
         append_logfile("MOBILEUSER PIPE CREATED");
     }
 
-    // TODO create message queues
-    
+    // Create queues
+    queue q[2];
+    queue q[0] = create_queue(settings.QUEUE_POS, BUF_SIZE);
+    queue q[1] = create_queue(settings.QUEUE_POS, BUF_SIZE);
 
     
 

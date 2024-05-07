@@ -6,7 +6,7 @@
 #include <string.h>
 #include <pthread.h>
 
-#include "message_queue_struct.h"
+#include "queue_struct.h"
 
 #ifndef BUF_SIZE
 #define BUF_SIZE 1024
