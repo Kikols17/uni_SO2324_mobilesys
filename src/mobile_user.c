@@ -86,12 +86,12 @@ int main(int argc, char *argv[]) {
     }
 
     if ((mobilepipe_fd = open(MOBILE_PIPE, O_WRONLY)) < 0) {
-        fprintf(stderr, "[ERROR]: Cannot open pipe for writing");
+        fprintf(stderr, "[ERROR]: Cannot open pipe for writing\n");
         exit(1);
     }
 
     if ( (message_queue_id = msgget(MESSAGE_QUEUE, 0666)) < 0 ) {
-        fprintf(stderr, "[ERROR]: Cannot open message queue");
+        fprintf(stderr, "[ERROR]: Cannot open message queue\n");
         exit(2);
     }
 

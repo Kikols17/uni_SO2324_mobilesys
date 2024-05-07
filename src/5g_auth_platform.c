@@ -78,7 +78,7 @@ void *receiver_ARM( void *arg );
 void *sender_ARM( void *arg );
 
 /* Utils */
-int check_requesttype(char *request)
+int check_requesttype(char *request);
 
 
 
@@ -376,10 +376,11 @@ int parallel_AuthorizationRequestManager() {
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
 
     // Create queues
-    queue *q[2];
-    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-    q[0] = create_queue(settings.QUEUE_POS, BUF_SIZE, &cond);
-    q[1] = create_queue(settings.QUEUE_POS, BUF_SIZE, &cond);
+    queue q[2];
+    pthread_cond_t written = PTHREAD_COND_INITIALIZER;
+    pthread_mutex_t written_lock = PTHREAD_MUTEX_INITIALIZER;
+    create_queue(&q[0], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock);
+    create_queue(&q[1], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock);
 
     
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
@@ -455,6 +456,9 @@ void *receiver_ARM( void *arg ) {
     /* Reciever (AUTHORIZATION_REQUEST_MANAGER) */
     char inbuffer[BUF_SIZE];
     int mobile_pipe_fd, backend_pipe_fd;
+
+    append_logfile("THREAD RECEIVER CREATED");
+    
     queue *video_queue = (queue *)arg;
     queue *others_queue = (queue *)arg+1;
 
@@ -482,8 +486,6 @@ void *receiver_ARM( void *arg ) {
     } else {
         append_logfile("MOBILEUSER PIPE CREATED");
     }
-
-    append_logfile("THREAD RECEIVER CREATED");
 
     fd_set readfds;
     while (1) {
@@ -523,7 +525,26 @@ void *sender_ARM( void *arg ) {
     append_logfile("THREAD SENDER CREATED");
     queue *video_queue = (queue *)arg;
     queue *others_queue = (queue *)arg+1;
-    while(1) {}
+
+    char msg[BUF_SIZE];
+
+    pthread_mutex_lock(video_queue->cond_lock);
+    while (1) {
+        if (video_queue->count==0) {
+            pthread_cond_wait(video_queue->cond, video_queue->cond_lock);
+        }
+        // [TODO]
+        if (count_queue(video_queue)>0) {
+            // Priority to video queue
+            read_queue(video_queue, msg);
+            printf("[READ-VIDEO] %s\n", msg);
+        } else {
+            // If video queue is empty, others queue must have smth
+            read_queue(others_queue, msg);
+            printf("[READ-OTHERS] %s\n", msg);
+        }
+    }
+
     return NULL;
 }
 
