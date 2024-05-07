@@ -458,7 +458,7 @@ void *receiver_ARM( void *arg ) {
     queue *others_queue = (queue *)arg+1;
 
 
-     if ( (mkfifo(BACKEND_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
+    if ( (mkfifo(BACKEND_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
         // Creates the BACKEND named pipe if it doesn't exist yet
         perror("Cannot create pipe: ");
         system_panic();
@@ -504,6 +504,13 @@ void *receiver_ARM( void *arg ) {
                 if (read(mobile_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
                     printf("[RECEIVED] MOBILE -> %s\n", inbuffer);
                 }
+            }
+            
+            /* check request type, and write to right queue */
+            if (check_requesttype(inbuffer) ) {
+                write_queue(video_queue, inbuffer);
+            } else {
+                write_queue(others_queue, inbuffer);
             }
         }
     }
