@@ -147,6 +147,7 @@ int main(int argc, char *argv[]) {
      * 2 because system_manager needs 2 children */
     child_count = 0;
     child_pids = (int*) malloc(sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));
+    memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));
 
     /* Create message queue */
     message_queue_id = msgget(MESSAGE_QUEUE, IPC_CREAT | 0777);
@@ -229,10 +230,7 @@ void close_system_manager(int sigint) {
     }
     
     append_logfile("5G_AUTH_PLATFORM SIMULATOR WAITING FOR LAST TASKS TO FINISH");
-    for (int i=0; i<child_count; i++) {             // }
-        kill(child_pids[i], SIGQUIT);               // } kill all child processes with sigint
-        waitpid(child_pids[i], NULL, 0);            // } and wait for said processes to finish
-    }                                               // }
+    kill_allchildren();     // kill all the children of this process
 
     /* Close message queue */
     msgctl(message_queue_id, IPC_RMID, 0);
@@ -257,10 +255,8 @@ void close_monitor_engine() {
 void close_authorization_request_manager() {
     /* Used to close AUTHORIZATION_REQUEST_MANAGER */
     append_logfile("AUTHORIZATION_REQUEST_MANAGER WAITING FOR LAST TASKS TO FINISH");
-    for (int i=0; i<settings.AUTH_SERVERS; i++) {   // }
-        kill(child_pids[i], SIGQUIT);               // } kill all child processes with sigint
-        waitpid(child_pids[i], NULL, 0);            // } and wait for said processes to finish
-    }                                               // }
+
+    kill_allchildren();     // kill all the children of this process
 
     // close named pipes
     unlink(BACKEND_PIPE);
@@ -366,7 +362,10 @@ int parallel_AuthorizationRequestManager() {
     }
     memset(process_name, '\0', max_processname_size);   // }
     strcpy(process_name, "AUTH_REQ_MANAGER");           // } change process name to ARM
-    child_count = 0;    // new process, no children
+
+    child_count = 0;                                                        // } new process, no children
+    memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));   // }
+
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_request_manager);
 
@@ -410,7 +409,10 @@ int parallel_AuthorizationEngine(int n) {
     }
     memset(process_name, '\0', max_processname_size);   // }
     strcpy(process_name, "AUTH_ENGINE");                // } change process name to AE
-    child_count = 0;        // new process, no children
+
+    child_count = 0;                                                        // } new process, no children
+    memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));   // }
+
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_engine);
 
@@ -440,7 +442,10 @@ int parallel_MonitorEngine() {
     }
     memset(process_name, '\0', max_processname_size);   // }
     strcpy(process_name, "MONITOR_ENGINE");             // } change process name to ME
-    child_count = 0;        // new process, no children
+
+    child_count = 0;                                                        // } new process, no children
+    memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));   // }
+
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_monitor_engine);
 
@@ -558,6 +563,7 @@ void *sender_ARM( void *arg ) {
 }
 
 
+/* UTILS */
 int check_requesttype(char *request) {
     /* Funcao para verificar se a request vai para a queue de video ou de outros */
     char *copy = strdup(request);
@@ -571,4 +577,17 @@ int check_requesttype(char *request) {
         return 0;
     }
     return -1;
+}
+
+int kill_allchildren() {
+    /* Kills all child processes */
+    for (int i=0; i<child_count;) {
+        if (child_pids[i]==-1) {
+            continue;
+        }
+        kill(child_pids[i], SIGQUIT);
+        ++i;
+        waitpid(child_pids[i], NULL, 0);
+    }
+    return 0;
 }
