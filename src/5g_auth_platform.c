@@ -377,8 +377,9 @@ int parallel_AuthorizationRequestManager() {
 
     // Create queues
     queue *q[2];
-    q[0] = create_queue(settings.QUEUE_POS, BUF_SIZE);
-    q[1] = create_queue(settings.QUEUE_POS, BUF_SIZE);
+    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+    q[0] = create_queue(settings.QUEUE_POS, BUF_SIZE, &cond);
+    q[1] = create_queue(settings.QUEUE_POS, BUF_SIZE, &cond);
 
     
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
@@ -522,7 +523,7 @@ void *sender_ARM( void *arg ) {
     append_logfile("THREAD SENDER CREATED");
     queue *video_queue = (queue *)arg;
     queue *others_queue = (queue *)arg+1;
-    while (1) {}        // TODO[META1] make sender
+    while(1) {}
     return NULL;
 }
 

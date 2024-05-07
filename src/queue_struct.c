@@ -15,7 +15,7 @@
 
 
 
-queue *create_queue(int size, int buf_size) {
+queue *create_queue(int size, int buf_size, pthread_cond_t *cond) {
     /* Creates a queue on heap */
     queue *new_q = (queue *)malloc(sizeof(queue));
     new_q->queue = (char **)malloc(sizeof(char*) * size);
@@ -25,6 +25,7 @@ queue *create_queue(int size, int buf_size) {
     new_q->size = size;
     new_q->buf_size = buf_size;
     pthread_mutex_init(&new_q->lock, NULL);
+    new_q->cond = cond;
     new_q->read_index = 0;
     new_q->write_index = 0;
     new_q->count = 0;
@@ -54,6 +55,7 @@ int write_queue(queue *q, char *msg) {
     strcpy(q->queue[q->write_index], msg);
     q->write_index = (q->write_index + 1) % q->size;
     q->count++;
+    pthread_cond_signal(q->cond);
     pthread_mutex_unlock(&q->lock);
     return 0;
 }
