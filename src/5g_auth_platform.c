@@ -31,6 +31,9 @@
 #include "message_struct.c"
 
 
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
+
 #define LOG_FILE "log.txt"
 
 #define MOBILE_PIPE "/tmp/mobile_pipe"
@@ -139,9 +142,10 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    /* Create "child_pids" with size settings.AUTH_SERVERS */
+    /* Create "child_pids" with size settings.AUTH_SERVERS+1 or 2, depending who is bigger 
+     * 2 because system_manager needs 2 children */
     child_count = 0;
-    child_pids = (int*) malloc(sizeof(int) * settings.AUTH_SERVERS);
+    child_pids = (int*) malloc(sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));
 
     /* Create message queue */
     message_queue_id = msgget(MESSAGE_QUEUE, IPC_CREAT | 0777);
