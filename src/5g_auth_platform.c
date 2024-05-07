@@ -78,7 +78,7 @@ void *receiver_ARM( void *arg );
 void *sender_ARM( void *arg );
 
 /* Utils */
-int check_message_queue(char *message);
+int check_requesttype(char *request)
 
 
 
@@ -93,8 +93,8 @@ typedef struct Settings {
 } Settings;
 
 typedef struct User_data {
-    int id;
-    int plafond_left;
+    int id;                     // pid of mobile user
+    int plafond_left;           // plafond left ( >= 0 disconnect )
 } User_data;
 
 
