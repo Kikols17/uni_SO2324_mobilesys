@@ -512,8 +512,10 @@ void *receiver_ARM( void *arg ) {
             /* check request type, and write to right queue */
             if (check_requesttype(inbuffer) ) {
                 write_queue(video_queue, inbuffer);
+                //printf("[WRITE-VIDEO] %s\n", inbuffer);
             } else {
                 write_queue(others_queue, inbuffer);
+                //printf("[WRITE-OTHERS] %s\n", inbuffer);
             }
         }
     }
@@ -528,20 +530,27 @@ void *sender_ARM( void *arg ) {
 
     char msg[BUF_SIZE];
 
-    pthread_mutex_lock(video_queue->cond_lock);
+    
     while (1) {
-        if (video_queue->count==0) {
-            pthread_cond_wait(video_queue->cond, video_queue->cond_lock);
-        }
-        // [TODO]
-        if (count_queue(video_queue)>0) {
-            // Priority to video queue
-            read_queue(video_queue, msg);
-            printf("[READ-VIDEO] %s\n", msg);
-        } else {
-            // If video queue is empty, others queue must have smth
-            read_queue(others_queue, msg);
-            printf("[READ-OTHERS] %s\n", msg);
+        // Wait for a signal to read from the queues
+        pthread_mutex_lock(video_queue->cond_lock);
+        pthread_cond_wait(video_queue->cond, video_queue->cond_lock);
+        pthread_mutex_unlock(video_queue->cond_lock);
+
+        while (1) {
+            // read until BOTH queues are empty
+            if (count_queue(video_queue)>0) {
+                // Priority to video queue
+                read_queue(video_queue, msg);
+                //printf("[READ-VIDEO] %s\n", msg);
+            } else if (count_queue(others_queue)>0) {
+                // If video queue is empty, others queue must have smth
+                read_queue(others_queue, msg);
+                //printf("[READ-OTHERS] %s\n", msg);
+            } else {
+                // If both queues are empty, wait for a signal
+                break;
+            }
         }
     }
 
