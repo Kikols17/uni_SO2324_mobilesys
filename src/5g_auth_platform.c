@@ -79,6 +79,7 @@ void *sender_ARM( void *arg );
 
 /* Utils */
 int check_requesttype(char *request);
+int kill_allchildren();
 
 
 
@@ -581,12 +582,11 @@ int check_requesttype(char *request) {
 
 int kill_allchildren() {
     /* Kills all child processes */
-    for (int i=0; i<child_count;) {
+    for (int i=0; i<settings.AUTH_SERVERS+1; i++) {
         if (child_pids[i]==-1) {
             continue;
         }
         kill(child_pids[i], SIGQUIT);
-        ++i;
         waitpid(child_pids[i], NULL, 0);
     }
     return 0;
