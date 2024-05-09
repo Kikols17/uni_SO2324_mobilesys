@@ -80,7 +80,7 @@ void *sender_ARM( void *arg );
 /* Utils */
 int check_requesttype(char *request);
 int kill_allchildren(int ARM_flag);
-int handle_request(char *request, char* response);
+int handle_request(int id, char *request, char* response);
 
 // client stuff
 int check_plafond(int pid, int data);
@@ -474,21 +474,18 @@ int parallel_AuthorizationEngine(int n) {
             // if read returns 0, pipe is closed, exit
             break;
         }
-        printf("[AE %d] %s\n", id, request);
-        cli_pid = handle_request(request, response);
+        //printf("[AE %d] %s\n", id, request);
+        cli_pid = handle_request(id, request, response);
         if (cli_pid==-1) {
             break;
         }
         if (response[0]!='\0') {
             // if response is not NULL, send response to client
-            printf("[AE %d] RESPONDING TO %d-\"%s\"\n", id, cli_pid, response);
+            //printf("[AE %d] RESPONDING TO %d-\"%s\"\n", id, cli_pid, response);
             msg.mtype = cli_pid;
             strcpy(msg.mtext, response);
             msgsnd(message_queue_id, &msg, sizeof(msg), 0);
         }
-        //msg.mtype = handle_request(request);
-        //strcpy(msg.mtext, request);
-        //msgsnd(message_queue_id, &msg, sizeof(msg), 0);
     }
     exit(0);    // AE exits on it's own terms
 }
@@ -676,20 +673,22 @@ int kill_allchildren(int ARM_flag) {
             continue;
         }
         kill(child_pids[i], SIGQUIT);
-        if (ARM_flag) { write(AE_unpipes[i][1], "-1#", 4); }
+        if (ARM_flag) { write(AE_unpipes[i][1], "-1#", 4); }    // dummy request to flush AE pipes
         waitpid(child_pids[i], NULL, 0);
     }
     return 0;
 }
 
-int handle_request(char *request, char* response) {
+int handle_request(int id, char *request, char* response) {
     /* Handles request, returns client PID */
     char aux[BUF_SIZE];
+    char log_message[BUF_SIZE];
     strcpy(aux, request);
 
     char *pid = strtok(aux, "#");
     char *arg1 = strtok(NULL, "#");
     char *arg2 = strtok(NULL, "\0");
+    int ans;
     //printf("\tpid: %s\n\targ1: %s\n\targ2: %s\n", pid, arg1, arg2);
     if (pid==NULL) {
         return -1;
@@ -697,15 +696,21 @@ int handle_request(char *request, char* response) {
     if (arg1!=NULL) {
         if (arg2!=NULL) {
             /* Two args, must be mobile data request */
-            if (check_plafond(atoi(pid), atoi(arg2))==0) {
+            ans = check_plafond(atoi(pid), atoi(arg2));
+            if (ans==0) {
                 // plafond is enough
                 response[0] = '\0';
-                //printf("CHECKING PLAFOND\n");
-            } else {
-                // plafond is not enough / client does not exist
+            } else if (ans==1) {
+                // plafond is not enough
                 delete_client(atoi(pid));
                 sprintf(response, "DISCONNECT");
-                //printf("DISCONNECTING\n");
+                sprintf(log_message, "AUTHORIZATION ENGINE %d DISCONNECTING CLIENT %d", id, atoi(pid));
+                append_logfile(log_message);
+            } else {
+                // client does not exist
+                response[0] = '\0';
+                sprintf(log_message, "AUTHORIZATION ENGINE %d CLIENT %d NOT FOUND", id, atoi(pid));
+                append_logfile(log_message);
             }
 
         } else {
@@ -713,10 +718,14 @@ int handle_request(char *request, char* response) {
             if (create_client(atoi(pid), atoi(arg1))==0) {
                 // client created
                 sprintf(response, "ACCEPT");
+                sprintf(log_message, "AUTHORIZATION ENGINE %d ACCEPTING NEW CLIENT %d", id, atoi(pid));
+                append_logfile(log_message);
                 //printf("CREATING CLIENT\n");
             } else {
                 // client already exists / could not create client
                 sprintf(response, "REJECT");
+                sprintf(log_message, "AUTHORIZATION ENGINE %d REJECTING NEW CLIENT %d", id, atoi(pid));
+                append_logfile(log_message);
                 //printf("REJECTING\n");
             }
         }
@@ -741,7 +750,7 @@ int check_plafond(int pid, int data) {
         }
     }
     sem_post(user_sem);
-    return 1;
+    return -1;
 }
 
 int create_client(int pid, int plafond) {
