@@ -80,7 +80,12 @@ void *sender_ARM( void *arg );
 /* Utils */
 int check_requesttype(char *request);
 int kill_allchildren(int ARM_flag);
-int handle_request(char *request);
+int handle_request(char *request, char* response);
+
+// client stuff
+int check_plafond(int pid, int data);
+int create_client(int pid, int plafond);
+int delete_client(int pid);
 
 
 
@@ -109,6 +114,7 @@ int system_manager_pid;
 int running = 1;
 
 // Shared memory stuff
+sem_t *user_sem;
 int shmid;
 User_data *user_array;
 
@@ -161,7 +167,14 @@ int main(int argc, char *argv[]) {
     /* Create semaphore for log file */
     log_sem = sem_open("log_sem", O_CREAT, 0777, 1);
     if ( log_sem==SEM_FAILED ) {
-        fprintf(stderr, "ERROR CAN'T CREATE SEMAPHORE\n");
+        fprintf(stderr, "ERROR CAN'T CREATE LOG SEMAPHORE\n");
+        system_panic(-1);
+    }
+
+    /* Create semaphore for shared memory */
+    user_sem = sem_open("user_sem", O_CREAT, 0777, 1);
+    if ( user_sem==SEM_FAILED ) {
+        fprintf(stderr, "ERROR CAN'T CREATE SHM SEMAPHORE\n");
         system_panic(-1);
     }
 
@@ -245,8 +258,10 @@ void close_system_manager(int sigint) {
                    "+----------------------------------------------------------------------+");
     sem_close(log_sem);         // }
     sem_unlink("log_sem");      // } unlink and close log_sem
-    shmdt(user_array);              // }
-    shmctl(shmid, IPC_RMID, 0);     // } free shared memory
+    sem_close(user_sem);            // }
+    sem_unlink("user_sem");         // } unlink and close user_sem
+    shmdt(user_array);                  // }
+    shmctl(shmid, IPC_RMID, 0);         // } free shared memory
 
     exit(0);
 }
@@ -303,6 +318,15 @@ int create_sharedmem() {
         fprintf(stderr, "[ERROR] Could not assign shared memory\n");
         return 1;
     }
+
+    // set user_array to default value
+    sem_wait(user_sem);
+    for (int i=0; i<settings.MOBILE_USERS; i++) {
+        user_array[i].id = -1;
+        user_array[i].plafond_left = -1;
+    }
+    sem_post(user_sem);
+
     return 0;
 }
 
@@ -436,13 +460,13 @@ int parallel_AuthorizationEngine(int n) {
 
     // if pid=0, child process, now authorization engine
     int id = n;
-    char message[BUF_SIZE];
-    sprintf(message, "PROCESS AUTHORIZATION_ENGINE %d CREATED", id);
-    append_logfile(message);
+    char log_message[BUF_SIZE];
+    sprintf(log_message, "PROCESS AUTHORIZATION_ENGINE %d CREATED", id);
+    append_logfile(log_message);
 
     int read_n;
-    char request[BUF_SIZE];
-    struct message msg;
+    char request[BUF_SIZE], response[BUF_SIZE];
+    struct message msg; int cli_pid;
     while (running) {       // "running" is to make the AE not exit during an operation
         // read from unnamed pipe AE_unpipes[n-1][0]
         read_n = read(AE_unpipes[n-1][0], request, BUF_SIZE);
@@ -451,14 +475,20 @@ int parallel_AuthorizationEngine(int n) {
             break;
         }
         printf("[AE %d] %s\n", id, request);
-        msg.mtype = handle_request(request);
-        if (msg.mtype==-1) {
+        cli_pid = handle_request(request, response);
+        if (cli_pid==-1) {
             break;
         }
-        strcpy(msg.mtext, request);
-        msgsnd(message_queue_id, &msg, sizeof(msg), 0);
-
-        // [TODO] handle request
+        if (response[0]!='\0') {
+            // if response is not NULL, send response to client
+            printf("[AE %d] REQUEST HANDLED  >>>%d-\"%s\"\n", id, cli_pid, response);
+            msg.mtype = cli_pid;
+            strcpy(msg.mtext, response);
+            msgsnd(message_queue_id, &msg, sizeof(msg), 0);
+        }
+        //msg.mtype = handle_request(request);
+        //strcpy(msg.mtext, request);
+        //msgsnd(message_queue_id, &msg, sizeof(msg), 0);
     }
     exit(0);    // AE exits on it's own terms
 }
@@ -652,13 +682,97 @@ int kill_allchildren(int ARM_flag) {
     return 0;
 }
 
-int handle_request(char *request) {
+int handle_request(char *request, char* response) {
     /* Handles request, returns client PID */
     char aux[BUF_SIZE];
     strcpy(aux, request);
+
     char *pid = strtok(aux, "#");
+    char *arg1 = strtok(NULL, "#");
+    char *arg2 = strtok(NULL, "\0");
+    printf("\tpid: %s\n\targ1: %s\n\targ2: %s\n", pid, arg1, arg2);
     if (pid==NULL) {
         return -1;
     }
+    if (arg1!=NULL) {
+        if (arg2!=NULL) {
+            /* Two args, must be mobile data request */
+            if (check_plafond(atoi(pid), atoi(arg2))==0) {
+                // plafond is enough
+                response[0] = '\0';
+                printf("CHECKING PLAFOND\n");
+            } else {
+                // plafond is not enough / client does not exist
+                delete_client(atoi(pid));
+                sprintf(response, "DISCONNECT");
+                printf("DISCONNECTING\n");
+            }
+
+        } else {
+            /* one arg, must be either attempt to connect to system by mobile, or backend request */
+            if (create_client(atoi(pid), atoi(arg1))==0) {
+                // client created
+                sprintf(response, "ACCEPT");
+                printf("CREATING CLIENT\n");
+            } else {
+                // client already exists / could not create client
+                sprintf(response, "REJECT");
+                printf("REJECTING\n");
+            }
+        }
+    }
+
     return atoi(pid);
+}
+
+int check_plafond(int pid, int data) {
+    /* Check if plafond is enough */
+    sem_wait(user_sem);
+    for (int i=0; i<settings.MOBILE_USERS; i++) {
+        if (user_array[i].id==pid) {
+            if (user_array[i].plafond_left >= data) {
+                user_array[i].plafond_left -= data;
+                sem_post(user_sem);
+                return 0;
+            } else {
+                sem_post(user_sem);
+                return 1;
+            }
+        }
+    }
+    sem_post(user_sem);
+    return 1;
+}
+
+int create_client(int pid, int plafond) {
+    /* Create new client */
+    sem_wait(user_sem);
+    for (int i=0; i<settings.MOBILE_USERS; i++) {
+        if (user_array[i].id==-1) {                 // free user space, use it
+            user_array[i].id = pid;
+            user_array[i].plafond_left = plafond;
+            sem_post(user_sem);
+            return 0;
+        } else if (user_array[i].id==pid) {
+            sem_post(user_sem);
+            return 1;                       // client already exists
+        }
+    }
+    sem_post(user_sem);
+    return 1;
+}
+
+int delete_client(int pid) {
+    /* Delete client */
+    sem_wait(user_sem);
+    for (int i=0; i<settings.MOBILE_USERS; i++) {
+        if (user_array[i].id==pid) {
+            user_array[i].id = -1;
+            user_array[i].plafond_left = -1;
+            sem_post(user_sem);
+            return 0;
+        }
+    }
+    sem_post(user_sem);
+    return 1;
 }
