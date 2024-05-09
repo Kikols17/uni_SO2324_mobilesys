@@ -105,6 +105,7 @@ sem_t *log_sem;
 struct Settings settings;
 int pid;
 int system_manager_pid;
+int running = 1;
 
 // Shared memory stuff
 int shmid;
@@ -266,7 +267,14 @@ void close_authorization_request_manager() {
     unlink(BACKEND_PIPE);
     unlink(MOBILE_PIPE);
 
-    // [TODO] close message queues
+    // close unnamed pipes
+    for (int i=0; i<settings.AUTH_SERVERS+1; i++) {
+        if (child_pids[i]==-1) {
+            break;
+        }
+        close(AE_unpipes[i][0]);
+        close(AE_unpipes[i][1]);
+    }
 
     append_logfile("AUTHORIZATION_REQUEST_MANAGER CLOSING");
 
@@ -277,9 +285,8 @@ void close_authorization_engine() {
     /* Used to close AUTHORIZATION_ENGINE */
     append_logfile("AUTHORIZATION_ENGINE CLOSING");
 
-    // TODO close unnamed pipe
-
-    exit(0);
+    running = 0;    // stop the while loop in AE, so that AE can exit only when it finishes what it's doing
+    exit(1); // [TODO] remove this line, fix AE closure
 }
 
 
@@ -433,8 +440,21 @@ int parallel_AuthorizationEngine(int n) {
     sprintf(message, "PROCESS AUTHORIZATION_ENGINE %d CREATED", id);
     append_logfile(message);
 
-    while (1) {}        // TODO[META1] do AUTHORIZATION_ENGINE
-    exit(0);
+    int read_n;
+    char request[BUF_SIZE];
+    while (running) {       // "running" is to make the AE not exit during an operation
+        // read from unnamed pipe AE_unpipes[n-1][0]
+        read_n = read(AE_unpipes[n-1][0], request, BUF_SIZE);
+        if (read_n==0) {
+            // if read returns 0, pipe is closed, exit
+            break;
+        }
+        printf("[AE %d] %s\n", id, request);
+        //msgsnd(message_queue_id, &request, sizeof(request), 0);
+
+        // [TODO] handle request
+    }
+    exit(0);    // AE exits on it's own terms
 }
 
 int parallel_MonitorEngine() {
@@ -450,6 +470,8 @@ int parallel_MonitorEngine() {
         child_count++;
         return 0;
     }
+
+    /* if pid=0, child process, now monitor engine */
     memset(process_name, '\0', max_processname_size);   // }
     strcpy(process_name, "MONITOR_ENGINE");             // } change process name to ME
 
@@ -459,7 +481,6 @@ int parallel_MonitorEngine() {
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_monitor_engine);
 
-    // if pid=0, child process, now monitor engine
     append_logfile("PROCESS MONITOR_ENGINE CREATED");
     while (1) {}        // TODO[META1] do MONITOR_ENGINE
     exit(0);
@@ -545,7 +566,7 @@ void *sender_ARM( void *arg ) {
 
     char msg[BUF_SIZE];
 
-    
+    int next_AE = 0;
     while (1) {
         // Wait for a signal to read from the queues
         pthread_mutex_lock(video_queue->cond_lock);
@@ -566,6 +587,28 @@ void *sender_ARM( void *arg ) {
                 // If both queues are empty, wait for a signal
                 break;
             }
+
+            // Write to first "next" AE that is alive and free
+            while (1) {
+                if (next_AE>=settings.AUTH_SERVERS+1) {
+                    // wrap around child_pids
+                    next_AE = 0;
+                }
+                if (child_pids[next_AE]!=-1) {
+                    // if AE is alive
+                    if (write(AE_unpipes[next_AE][1], msg, strlen(msg)+1) == -1) {
+                        // if write fails, AE is dead, kill it
+                        append_logfile("[FAILURE] UNPIPE TO AE BROKEN, KILLING AE");
+                        kill(child_pids[next_AE], SIGQUIT);
+                        child_pids[next_AE] = -1;
+                    }
+
+                    next_AE++;
+                    break;
+                }
+                next_AE++;
+            }
+
         }
     }
 
