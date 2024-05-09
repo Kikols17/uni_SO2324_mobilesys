@@ -81,7 +81,7 @@ int auth5g_request(char *req_type) {
 
 void *user_input() {
     /* Thread that handles the user input, and writes to pipe */
-    char option[3];
+    char option[64];
     system("clear");
     while (1) {
         fprintf(stdout, "Backoffice\n");
@@ -94,9 +94,11 @@ void *user_input() {
         "1: reset - limpa as estatísticas relacionadas calculadas até ao momento pelo sistema.\n"
         "2: exit - termina a execução do programa.\n");
         */
-        fgets(option, 3, stdin);
+        fgets(option, 64, stdin);
         system("clear");
-        if (option[0]=='0') {
+        if (option[1]!='\n') {
+            fprintf(stderr, "[ERROR]: Invalid option\n");
+        } else if (option[0]=='0') {
             if( auth5g_request("data_stats")!=0 ) {
                 exit(1);;
             }
