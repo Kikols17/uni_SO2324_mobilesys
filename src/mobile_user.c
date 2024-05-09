@@ -75,9 +75,9 @@ int main(int argc, char *argv[]) {
     settings.max_request = atoi(argv[2]);
     requests_left = settings.max_request;
 
-    settings.video_interval = ((double)atoi(argv[3]))/1000;
-    settings.music_interval = ((double)atoi(argv[4]))/1000;
-    settings.social_interval = ((double)atoi(argv[5]))/1000;
+    settings.video_interval = (double)atoi(argv[3]);
+    settings.music_interval = (double)atoi(argv[4]);
+    settings.social_interval = (double)atoi(argv[5]);
 
     settings.request_size = atoi(argv[6]);
 
@@ -163,7 +163,7 @@ void *timed_request(void *req_p) {
     /* Make requests of type "req->type" with interval "req->interval" */
     struct Request *req = (struct Request *) req_p;
     while (1) {
-        sleep(req->interval);
+        usleep(1000*req->interval);
         if (auth5g_request(req->type)!=0) {
             return NULL;
         }
