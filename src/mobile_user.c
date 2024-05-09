@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <sys/ipc.h>
@@ -49,6 +50,7 @@ void *messagequeue_response();
 
 int auth5g_register();
 int auth5g_request(char *req_type);
+int response_handler(char *response);
 
 
 
@@ -178,7 +180,10 @@ void *messagequeue_response() {
             fprintf(stderr, "[ERROR]: Cannot read from message queue\n");
             exit(2);
         }
-        printf("RECEIVED: \"%s\"\n", msg_in.mtext);
+        //printf("RECEIVED: \"%s\"\n", msg_in.mtext);
+        if (response_handler(msg_in.mtext)==-1) {
+            exit(0);
+        }
     }
     return NULL;
 }
@@ -230,4 +235,22 @@ int auth5g_request(char *req_type) {
     requests_left--;
     pthread_mutex_unlock(&mutex_requests);
     return 0;
+}
+
+int response_handler(char *response) {
+    /* Handle the response from the system */
+    if (strcmp(response, "REJECTED")==0) {
+        fprintf(stdout, "[FROM SYS] Mobile user rejected by system...\n");
+        return -1;
+    } else if (strcmp(response, "ACCEPT")==0) {
+        fprintf(stdout, "[FROM SYS] Mobile user accepted by system!\n");
+        return 0;
+    } else if (strcmp(response, "DISCONNECT")==0) {
+        fprintf(stdout, "[FROM SYS] Mobile user disconnected by system...\n");
+        return -1;
+    } else {
+        fprintf(stderr, "[ERROR]: Unknown response \"%s\"\n", response);
+        return 1;
+    }
+    return 1;
 }

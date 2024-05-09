@@ -481,7 +481,7 @@ int parallel_AuthorizationEngine(int n) {
         }
         if (response[0]!='\0') {
             // if response is not NULL, send response to client
-            printf("[AE %d] REQUEST HANDLED  >>>%d-\"%s\"\n", id, cli_pid, response);
+            printf("[AE %d] RESPONDING TO %d-\"%s\"\n", id, cli_pid, response);
             msg.mtype = cli_pid;
             strcpy(msg.mtext, response);
             msgsnd(message_queue_id, &msg, sizeof(msg), 0);
@@ -571,13 +571,13 @@ void *receiver_ARM( void *arg ) {
             if (FD_ISSET(backend_pipe_fd, &readfds)) {
                 // If is written to backend_pipe_fd
                 if (read(backend_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
-                    printf("[RECEIVED] BACKEND -> %s\n", inbuffer);
+                    //printf("[RECEIVED] BACKEND -> %s\n", inbuffer);
                 }
             }
             if (FD_ISSET(mobile_pipe_fd, &readfds)) {
                 // If is written to mobile_pipe_fd
                 if (read(mobile_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
-                    printf("[RECEIVED] MOBILE -> %s\n", inbuffer);
+                    //printf("[RECEIVED] MOBILE -> %s\n", inbuffer);
                 }
             }
             
@@ -690,7 +690,7 @@ int handle_request(char *request, char* response) {
     char *pid = strtok(aux, "#");
     char *arg1 = strtok(NULL, "#");
     char *arg2 = strtok(NULL, "\0");
-    printf("\tpid: %s\n\targ1: %s\n\targ2: %s\n", pid, arg1, arg2);
+    //printf("\tpid: %s\n\targ1: %s\n\targ2: %s\n", pid, arg1, arg2);
     if (pid==NULL) {
         return -1;
     }
@@ -700,12 +700,12 @@ int handle_request(char *request, char* response) {
             if (check_plafond(atoi(pid), atoi(arg2))==0) {
                 // plafond is enough
                 response[0] = '\0';
-                printf("CHECKING PLAFOND\n");
+                //printf("CHECKING PLAFOND\n");
             } else {
                 // plafond is not enough / client does not exist
                 delete_client(atoi(pid));
                 sprintf(response, "DISCONNECT");
-                printf("DISCONNECTING\n");
+                //printf("DISCONNECTING\n");
             }
 
         } else {
@@ -713,11 +713,11 @@ int handle_request(char *request, char* response) {
             if (create_client(atoi(pid), atoi(arg1))==0) {
                 // client created
                 sprintf(response, "ACCEPT");
-                printf("CREATING CLIENT\n");
+                //printf("CREATING CLIENT\n");
             } else {
                 // client already exists / could not create client
                 sprintf(response, "REJECT");
-                printf("REJECTING\n");
+                //printf("REJECTING\n");
             }
         }
     }
