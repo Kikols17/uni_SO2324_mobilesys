@@ -31,13 +31,13 @@
 typedef struct Settings {
     int init_plafond;
     int max_request;
-    int video_interval, music_interval, social_interval;
+    double video_interval, music_interval, social_interval;
     int request_size;
 } Settings;
 
 typedef struct Request {
     char *type;
-    int interval;
+    double interval;
 } Request;
 
 
@@ -54,6 +54,7 @@ int auth5g_request(char *req_type);
 
 // Hold all the settings for this mobile user
 struct Settings settings;
+pthread_mutex_t mutex_requests = PTHREAD_MUTEX_INITIALIZER;
 int requests_left;
 
 int mobilepipe_fd;
@@ -72,14 +73,14 @@ int main(int argc, char *argv[]) {
     settings.max_request = atoi(argv[2]);
     requests_left = settings.max_request;
 
-    settings.video_interval = atoi(argv[3]);
-    settings.music_interval = atoi(argv[4]);
-    settings.social_interval = atoi(argv[5]);
+    settings.video_interval = ((double)atoi(argv[3]))/1000;
+    settings.music_interval = ((double)atoi(argv[4]))/1000;
+    settings.social_interval = ((double)atoi(argv[5]))/1000;
 
     settings.request_size = atoi(argv[6]);
 
 
-    fprintf(stdout, "Creating user:\n\tinitial plafond->%d\n\tmax requests->%d\n\tvideo interval->%d\n\tmusic interval->%d\n\tsocial interval->%d\n\trequest size->%d\n", settings.init_plafond, settings.max_request, settings.video_interval, settings.music_interval, settings.social_interval, settings.request_size);
+    fprintf(stdout, "Creating user:\n\tinitial plafond->%d\n\tmax requests->%d\n\tvideo interval->%f\n\tmusic interval->%f\n\tsocial interval->%f\n\trequest size->%d\n", settings.init_plafond, settings.max_request, settings.video_interval, settings.music_interval, settings.social_interval, settings.request_size);
 
     if ( validate_settings() != 0 ) {
         return 1;
@@ -115,6 +116,8 @@ int main(int argc, char *argv[]) {
     pthread_join(requesters[2], NULL);
     pthread_cancel(messagereciever);        // kill messagereciever when all requesters are done
 
+    // destroy the mutex
+    pthread_mutex_destroy(&mutex_requests);
 
     return 0;
 }
@@ -158,7 +161,7 @@ void *timed_request(void *req_p) {
     /* Make requests of type "req->type" with interval "req->interval" */
     struct Request *req = (struct Request *) req_p;
     while (1) {
-        sleep(req->interval/1000);
+        sleep(req->interval);
         if (auth5g_request(req->type)!=0) {
             return NULL;
         }
@@ -211,16 +214,20 @@ int auth5g_request(char *req_type) {
      * Request format: "{pid}#{req_type}#{request_size}"
      */
     char buff_out[BUF_SIZE];
+    pthread_mutex_lock(&mutex_requests);
     if (requests_left==0) {
         fprintf(stdout, "no requests left\n");
+        pthread_mutex_unlock(&mutex_requests);
         return 1;
     }
     sprintf(buff_out, "%d#%s#%d", getpid(), req_type, settings.request_size);
-    fprintf(stdout, "[REQUEST]: \"%s\"\n", buff_out);
+    fprintf(stdout, "[REQUEST #%d]: \"%s\"\n", requests_left, buff_out);
     if ( write(mobilepipe_fd, &buff_out, sizeof(buff_out))==0 ) {
         fprintf(stderr, "[ERROR]: Cannot write to \"%s\" pipe\n", MOBILE_PIPE);
+        pthread_mutex_unlock(&mutex_requests);
         return -1;
     }
     requests_left--;
+    pthread_mutex_unlock(&mutex_requests);
     return 0;
 }

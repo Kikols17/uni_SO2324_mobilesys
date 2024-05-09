@@ -100,17 +100,20 @@ typedef struct User_data {
 
 
 
+// General stuff
 sem_t *log_sem;
 struct Settings settings;
 int pid;
 int system_manager_pid;
 
+// Shared memory stuff
 int shmid;
 User_data *user_array;
 
 // Store child pids of the given process
 int child_count;
 int *child_pids;
+int (*AE_unpipes)[2];     // only for ARM
 
 // Message queue
 int message_queue_id;
@@ -361,16 +364,18 @@ int parallel_AuthorizationRequestManager() {
         child_count++;
         return 0;
     }
-    memset(process_name, '\0', max_processname_size);   // }
-    strcpy(process_name, "AUTH_REQ_MANAGER");           // } change process name to ARM
+
+    /* if pid=0, child process, now authorization request manager */
+    memset(process_name, '\0', max_processname_size);       // }
+    strcpy(process_name, "AUTH_REQ_MANAGER");               // } change process name to ARM
 
     child_count = 0;                                                        // } new process, no children
     memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));   // }
 
+    AE_unpipes = (int(*)[2]) malloc(sizeof(int[2]) * settings.AUTH_SERVERS+1);
+
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_request_manager);
-
-    /* if pid=0, child process, now authorization request manager */
 
     pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
@@ -384,6 +389,10 @@ int parallel_AuthorizationRequestManager() {
 
     
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
+        if (pipe(AE_unpipes[i])<0) {
+            append_logfile("[ERROR] COULD NOT CREATE UNNAMED PIPE FOR AE\n");
+            system_panic();
+        }
         parallel_AuthorizationEngine(i+1);
     }
 
@@ -591,3 +600,4 @@ int kill_allchildren() {
     }
     return 0;
 }
+
