@@ -158,7 +158,7 @@ void *timed_request(void *req_p) {
     /* Make requests of type "req->type" with interval "req->interval" */
     struct Request *req = (struct Request *) req_p;
     while (1) {
-        sleep(req->interval);
+        sleep(req->interval/1000);
         if (auth5g_request(req->type)!=0) {
             return NULL;
         }

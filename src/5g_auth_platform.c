@@ -175,7 +175,7 @@ int main(int argc, char *argv[]) {
     parallel_AuthorizationRequestManager();
     parallel_MonitorEngine();
 
-    while (1) {}        // mantain open to manage the shared memory and semaphores
+    wait(NULL);
     return 0;
 }
 
