@@ -79,7 +79,8 @@ void *sender_ARM( void *arg );
 
 /* Utils */
 int check_requesttype(char *request);
-int kill_allchildren();
+int kill_allchildren(int ARM_flag);
+int handle_request(char *request);
 
 
 
@@ -235,7 +236,7 @@ void close_system_manager(int sigint) {
     }
     
     append_logfile("5G_AUTH_PLATFORM SIMULATOR WAITING FOR LAST TASKS TO FINISH");
-    kill_allchildren();     // kill all the children of this process
+    kill_allchildren(0);    // kill all the children of this process
 
     /* Close message queue */
     msgctl(message_queue_id, IPC_RMID, 0);
@@ -261,7 +262,7 @@ void close_authorization_request_manager() {
     /* Used to close AUTHORIZATION_REQUEST_MANAGER */
     append_logfile("AUTHORIZATION_REQUEST_MANAGER WAITING FOR LAST TASKS TO FINISH");
 
-    kill_allchildren();     // kill all the children of this process
+    kill_allchildren(1);    // kill all the children of this process
 
     // close named pipes
     unlink(BACKEND_PIPE);
@@ -286,7 +287,6 @@ void close_authorization_engine() {
     append_logfile("AUTHORIZATION_ENGINE CLOSING");
 
     running = 0;    // stop the while loop in AE, so that AE can exit only when it finishes what it's doing
-    exit(1); // [TODO] remove this line, fix AE closure
 }
 
 
@@ -442,6 +442,7 @@ int parallel_AuthorizationEngine(int n) {
 
     int read_n;
     char request[BUF_SIZE];
+    struct message msg;
     while (running) {       // "running" is to make the AE not exit during an operation
         // read from unnamed pipe AE_unpipes[n-1][0]
         read_n = read(AE_unpipes[n-1][0], request, BUF_SIZE);
@@ -450,7 +451,12 @@ int parallel_AuthorizationEngine(int n) {
             break;
         }
         printf("[AE %d] %s\n", id, request);
-        //msgsnd(message_queue_id, &request, sizeof(request), 0);
+        msg.mtype = handle_request(request);
+        if (msg.mtype==-1) {
+            break;
+        }
+        strcpy(msg.mtext, request);
+        msgsnd(message_queue_id, &msg, sizeof(msg), 0);
 
         // [TODO] handle request
     }
@@ -564,7 +570,7 @@ void *sender_ARM( void *arg ) {
     queue *video_queue = (queue *)arg;
     queue *others_queue = (queue *)arg+1;
 
-    char msg[BUF_SIZE];
+    char request[BUF_SIZE];
 
     int next_AE = 0;
     while (1) {
@@ -577,12 +583,12 @@ void *sender_ARM( void *arg ) {
             // read until BOTH queues are empty
             if (count_queue(video_queue)>0) {
                 // Priority to video queue
-                read_queue(video_queue, msg);
-                //printf("[READ-VIDEO] %s\n", msg);
+                read_queue(video_queue, request);
+                //printf("[READ-VIDEO] %s\n", request);
             } else if (count_queue(others_queue)>0) {
                 // If video queue is empty, others queue must have smth
-                read_queue(others_queue, msg);
-                //printf("[READ-OTHERS] %s\n", msg);
+                read_queue(others_queue, request);
+                //printf("[READ-OTHERS] %s\n", request);
             } else {
                 // If both queues are empty, wait for a signal
                 break;
@@ -596,7 +602,7 @@ void *sender_ARM( void *arg ) {
                 }
                 if (child_pids[next_AE]!=-1) {
                     // if AE is alive
-                    if (write(AE_unpipes[next_AE][1], msg, strlen(msg)+1) == -1) {
+                    if (write(AE_unpipes[next_AE][1], request, strlen(request)+1) == -1) {
                         // if write fails, AE is dead, kill it
                         append_logfile("[FAILURE] UNPIPE TO AE BROKEN, KILLING AE");
                         kill(child_pids[next_AE], SIGQUIT);
@@ -616,6 +622,7 @@ void *sender_ARM( void *arg ) {
 }
 
 
+
 /* UTILS */
 int check_requesttype(char *request) {
     /* Funcao para verificar se a request vai para a queue de video ou de outros */
@@ -632,15 +639,26 @@ int check_requesttype(char *request) {
     return -1;
 }
 
-int kill_allchildren() {
+int kill_allchildren(int ARM_flag) {
     /* Kills all child processes */
     for (int i=0; i<settings.AUTH_SERVERS+1; i++) {
         if (child_pids[i]==-1) {
             continue;
         }
         kill(child_pids[i], SIGQUIT);
+        if (ARM_flag) { write(AE_unpipes[i][1], "-1#", 4); }
         waitpid(child_pids[i], NULL, 0);
     }
     return 0;
 }
 
+int handle_request(char *request) {
+    /* Handles request, returns client PID */
+    char aux[BUF_SIZE];
+    strcpy(aux, request);
+    char *pid = strtok(aux, "#");
+    if (pid==NULL) {
+        return -1;
+    }
+    return atoi(pid);
+}
