@@ -12,7 +12,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <semaphore.h>
-#include <fcntl.h>
 #include <pthread.h>
 #include <sys/wait.h>
 #include <sys/shm.h>
