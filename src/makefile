@@ -6,10 +6,10 @@ all: 5g_auth_platform backoffice_user mobile_user
 	gcc -Wall -Wextra 5g_auth_platform.o message_struct.o -pthread -o 5g_auth_platform
 
 backoffice_user: backoffice_user.o message_struct.o
-	gcc -Wall -Wextra backoffice_user.o message_struct.o -o backoffice_user
+	gcc -Wall -Wextra backoffice_user.o message_struct.o -pthread -o backoffice_user
 
 mobile_user: mobile_user.o message_struct.o
-	gcc -Wall -Wextra mobile_user.o message_struct.o -o mobile_user
+	gcc -Wall -Wextra mobile_user.o message_struct.o -pthread -o mobile_user
 
 
 
