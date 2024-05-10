@@ -101,6 +101,7 @@ typedef struct Settings {
 
 typedef struct User_data {
     int id;                     // pid of mobile user
+    int init_plafond;           // initial plafond
     int plafond_left;           // plafond left ( >= 0 disconnect )
 } User_data;
 
