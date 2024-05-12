@@ -627,14 +627,14 @@ void *sender_ARM( void *arg ) {
                 append_logfile("[FAILURE] VIDEO REQUEST TIMED OUT, DISCARDING");
                 continue;
             } else {
-                printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
+                //printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
             }
             if (clock()-req_time > settings.MAX_OTHERS_WAIT && !check_requesttype(request) ) {
                 // if request is not video, and has waited too long, discard
                 append_logfile("[FAILURE] OTHERS REQUEST TIMED OUT, DISCARDING");
                 continue;
             } else {
-                printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
+                //printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
             }
 
             // Write to first "next" AE that is alive and free
