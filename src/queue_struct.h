@@ -8,7 +8,8 @@
 #include <pthread.h>
 
 typedef struct queue {
-    char **queue;
+    char **req_queue;
+    clock_t *time_queue;
     int size;
     int buf_size;
     pthread_mutex_t lock;
@@ -26,6 +27,6 @@ void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthrea
 int count_queue(queue *q);
 
 int write_queue(queue *q, char *msg);
-int read_queue(queue *q, char *msg);
+int read_queue(queue *q, char *msg, clock_t *time);
 
 #endif

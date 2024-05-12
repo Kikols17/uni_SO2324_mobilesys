@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "queue_struct.h"
 
@@ -17,9 +18,10 @@
 
 void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock) {
     /* Creates a queue on heap */
-    q->queue = (char **)malloc(sizeof(char*) * size);
+    q->req_queue = (char **)malloc(sizeof(char*) * size);
+    q->time_queue = (time_t *)malloc(sizeof(time_t) * size);
     for (int i = 0; i < size; i++) {
-        q->queue[i] = (char *)malloc(sizeof(char) * buf_size);
+        q->req_queue[i] = (char *)malloc(sizeof(char) * buf_size);
     }
     q->size = size;
     q->buf_size = buf_size;
@@ -36,9 +38,10 @@ void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthrea
 void destroy_queue(queue *q) {
     / Frees the queue /
     for (int i = 0; i < q->size; i++) {
-        free(q->queue[i]);
+        free(q->req_queue[i]);
     }
-    free(q->queue);
+    free(q->req_queue);
+    free(q->time_queue);
     pthread_mutex_destroy(&q->lock);
     free(q);
 }
@@ -64,7 +67,9 @@ int write_queue(queue *q, char *msg) {
         pthread_mutex_unlock(&q->lock);
         return 1;
     }
-    strcpy(q->queue[q->write_index], msg);
+    strcpy(q->req_queue[q->write_index], msg);      // }
+    q->time_queue[q->write_index] = clock();        // } Write the message and time
+
     q->write_index = (q->write_index + 1) % q->size;
     q->count++;
 
@@ -76,7 +81,7 @@ int write_queue(queue *q, char *msg) {
     return 0;
 }
 
-int read_queue(queue *q, char *msg) {
+int read_queue(queue *q, char *msg, clock_t *timeout) {
     /* Reads a message from the queue
      * returns 0 if successful, 1 if queue is empty (should never ask to read from an empty queue, but anyway)
      * copies the message to "msg" buffer
@@ -86,7 +91,9 @@ int read_queue(queue *q, char *msg) {
         pthread_mutex_unlock(&q->lock);
         return 1;
     }
-    strcpy(msg, q->queue[q->read_index]);
+    strcpy(msg, q->req_queue[q->read_index]);   // }
+    *timeout = q->time_queue[q->read_index];    // } Read the message and time
+
     q->read_index = (q->read_index + 1) % q->size;
     q->count--;
     pthread_mutex_unlock(&q->lock);

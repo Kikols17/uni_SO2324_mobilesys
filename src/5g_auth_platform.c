@@ -598,6 +598,7 @@ void *sender_ARM( void *arg ) {
     queue *others_queue = (queue *)arg+1;
 
     char request[BUF_SIZE];
+    clock_t req_time;
 
     int next_AE = 0;
     while (1) {
@@ -610,15 +611,30 @@ void *sender_ARM( void *arg ) {
             // read until BOTH queues are empty
             if (count_queue(video_queue)>0) {
                 // Priority to video queue
-                read_queue(video_queue, request);
+                read_queue(video_queue, request, &req_time);
                 //printf("[READ-VIDEO] %s\n", request);
             } else if (count_queue(others_queue)>0) {
                 // If video queue is empty, others queue must have smth
-                read_queue(others_queue, request);
+                read_queue(others_queue, request, &req_time);
                 //printf("[READ-OTHERS] %s\n", request);
             } else {
                 // If both queues are empty, wait for a signal
                 break;
+            }
+
+            if (clock()-req_time > settings.MAX_VIDEO_WAIT && check_requesttype(request) ) {
+                // if request is video, and has waited too long, discard
+                append_logfile("[FAILURE] VIDEO REQUEST TIMED OUT, DISCARDING");
+                continue;
+            } else {
+                printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
+            }
+            if (clock()-req_time > settings.MAX_OTHERS_WAIT && !check_requesttype(request) ) {
+                // if request is not video, and has waited too long, discard
+                append_logfile("[FAILURE] OTHERS REQUEST TIMED OUT, DISCARDING");
+                continue;
+            } else {
+                printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
             }
 
             // Write to first "next" AE that is alive and free
