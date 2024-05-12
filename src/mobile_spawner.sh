@@ -12,3 +12,8 @@ gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & ex
 gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
 gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
 gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
