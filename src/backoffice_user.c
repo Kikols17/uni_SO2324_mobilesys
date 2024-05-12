@@ -23,6 +23,7 @@
 #define BACKEND_PIPE "/tmp/backend_pipe"
 
 #define BUF_SIZE 1024
+#define REQ_BUFF 64
 #define MESSAGE_QUEUE 1234
 
 
@@ -66,7 +67,7 @@ int main(int argc, char *argv[]) {
 
 int auth5g_request(char *req_type) {
     /* Make request of type "req_type" */
-    char buff_out[BUF_SIZE];            // Store messages to write to pipe
+    char buff_out[REQ_BUFF];            // Store messages to write to pipe
 
     sprintf(buff_out, "%d#%s", getpid(), req_type);
     printf("MAKE REQUEST: \"%s\"\n", buff_out);

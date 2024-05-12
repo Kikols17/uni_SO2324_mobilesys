@@ -40,6 +40,7 @@
 #define BACKEND_PIPE "/tmp/backend_pipe"
 
 #define BUF_SIZE 1024
+#define REQ_SIZE 64
 #define MESSAGE_QUEUE 1234
 
 
@@ -523,7 +524,8 @@ int parallel_MonitorEngine() {
 
 void *receiver_ARM( void *arg ) {
     /* Reciever (AUTHORIZATION_REQUEST_MANAGER) */
-    char inbuffer[BUF_SIZE];
+    char request[REQ_SIZE];
+    char logbuffer[BUF_SIZE];
     int mobile_pipe_fd, backend_pipe_fd;
 
     append_logfile("THREAD RECEIVER CREATED");
@@ -567,24 +569,38 @@ void *receiver_ARM( void *arg ) {
         if ( select(mobile_pipe_fd+1, &readfds, NULL, NULL, NULL)>0 ) {
             if (FD_ISSET(backend_pipe_fd, &readfds)) {
                 // If is written to backend_pipe_fd
-                if (read(backend_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
+                if (read(backend_pipe_fd, &request, sizeof(request))!=EOF) {
                     //printf("[RECEIVED] BACKEND -> %s\n", inbuffer);
+                } else {
+                    // if read fails, exit
+                    append_logfile("[FAILURE] PIPE TO BACKEND BROKEN, PANIC!");
+                    system_panic();
                 }
             }
             if (FD_ISSET(mobile_pipe_fd, &readfds)) {
                 // If is written to mobile_pipe_fd
-                if (read(mobile_pipe_fd, &inbuffer, sizeof(inbuffer))!=EOF) {
+                if (read(mobile_pipe_fd, &request, sizeof(request))!=EOF) {
                     //printf("[RECEIVED] MOBILE -> %s\n", inbuffer);
+                } else {
+                    // if read fails, exit
+                    append_logfile("[FAILURE] PIPE TO MOBILEUSER BROKEN, PANIC!");
+                    system_panic();
                 }
             }
             
             /* check request type, and write to right queue */
-            if (check_requesttype(inbuffer) ) {
-                write_queue(video_queue, inbuffer);
-                //printf("[WRITE-VIDEO] %s\n", inbuffer);
+            if (check_requesttype(request) ) {
+                if (write_queue(video_queue, request)!=0) {
+                    // video_queue is full, discard
+                    sprintf(logbuffer, "[QUEUE_FULL] VIDEO_QUEUE FULL, REQUEST \"%s\" DISCARDED", request);
+                    append_logfile(logbuffer);
+                }
             } else {
-                write_queue(others_queue, inbuffer);
-                //printf("[WRITE-OTHERS] %s\n", inbuffer);
+                if (write_queue(others_queue, request)!=0) {
+                    // others_queue is full, discard
+                    sprintf(logbuffer, "[QUEUE_FULL] OTHERS_QUEUE FULL, REQUEST \"%s\" DISCARDED", request);
+                    append_logfile(logbuffer);
+                }
             }
         }
     }
@@ -597,7 +613,8 @@ void *sender_ARM( void *arg ) {
     queue *video_queue = (queue *)arg;
     queue *others_queue = (queue *)arg+1;
 
-    char request[BUF_SIZE];
+    char request[REQ_SIZE];
+    char logbuffer[BUF_SIZE];
     clock_t req_time;
 
     int next_AE = 0;
@@ -624,14 +641,16 @@ void *sender_ARM( void *arg ) {
 
             if (clock()-req_time > settings.MAX_VIDEO_WAIT && check_requesttype(request) ) {
                 // if request is video, and has waited too long, discard
-                append_logfile("[FAILURE] VIDEO REQUEST TIMED OUT, DISCARDING");
+                sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %ldms, DISCARDING", request, clock()-req_time);
+                append_logfile(logbuffer);
                 continue;
             } else {
                 //printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
             }
             if (clock()-req_time > settings.MAX_OTHERS_WAIT && !check_requesttype(request) ) {
                 // if request is not video, and has waited too long, discard
-                append_logfile("[FAILURE] OTHERS REQUEST TIMED OUT, DISCARDING");
+                sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %ldms, DISCARDING", request, clock()-req_time);
+                append_logfile(logbuffer);
                 continue;
             } else {
                 //printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);

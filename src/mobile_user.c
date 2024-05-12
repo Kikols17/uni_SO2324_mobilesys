@@ -25,6 +25,7 @@
 
 #define MOBILE_PIPE "/tmp/mobile_pipe"
 
+#define REQ_BUFF 64
 #define BUF_SIZE 1024
 #define MESSAGE_QUEUE 1234
 
@@ -198,7 +199,7 @@ int auth5g_register() {
      * 
      * Register format: "{pid}#{plafond}"
      */
-    char buff_out[BUF_SIZE];
+    char buff_out[REQ_BUFF];
     sprintf(buff_out, "%d#%d", getpid(), settings.init_plafond);
     fprintf(stdout, "[REGISTER]: \"%s\"\n", buff_out);
     if ( write(mobilepipe_fd, &buff_out, sizeof(buff_out))==0 ) {
@@ -218,7 +219,7 @@ int auth5g_request(char *req_type) {
      *
      * Request format: "{pid}#{req_type}#{request_size}"
      */
-    char buff_out[BUF_SIZE];
+    char buff_out[REQ_BUFF];
     pthread_mutex_lock(&mutex_requests);
     if (requests_left==0) {
         fprintf(stdout, "no requests left\n");
