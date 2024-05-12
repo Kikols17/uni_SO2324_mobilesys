@@ -1,4 +1,5 @@
 all: 5g_auth_platform backoffice_user mobile_user
+	> log.txt	# Clear log file
 
 
 
@@ -32,4 +33,4 @@ queue_struct.o: queue_struct.c queue_struct.h
 clean:
 	rm -f *.o
 	rm -f 5g_auth_platform backoffice_user mobile_user
-	> log.txt
+	> log.txt	# Clear log file
