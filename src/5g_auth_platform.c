@@ -801,19 +801,17 @@ int handle_request(int id, char *request, char* response) {
                     append_logfile(log_message);
                     //printf("REJECTING\n");
                 }
+
             } else {
                 // backoffice order
                 if ( strcmp(arg1, "reset")==0 ) {
                     // reset
-                    printf("RESET\n");
-                    sprintf(response, "RESET");
+                    sprintf(response, "[TODO]RESET");
                 } else if ( strcmp(arg1, "data_stats")==0 ) {
                     // data_stats
-                    printf("DATA_STATS\n");
-                    sprintf(response, "DATA_STATS");
+                    sprintf(response, "[TODO]DATA_STATS");
                 } else {
                     // unknown order
-                    printf("UNKNOWN\n");
                     sprintf(response, "NON-VALID REQUEST \"%s\".", arg1);
                 }
             }
