@@ -9,22 +9,19 @@
 
 #include "queue_struct.h"
 
-#ifndef BUF_SIZE
-#define BUF_SIZE 1024
+#ifndef REQ_SIZE
+#define REQ_SIZE 64
 #endif
 
 
 
 
-void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock, int *state ,pthread_cond_t *statecond, pthread_mutex_t *statecond_lock) {
+void create_queue(queue *q, int size, pthread_cond_t *cond, pthread_mutex_t *cond_lock, int *state ,pthread_cond_t *statecond, pthread_mutex_t *statecond_lock) {
     /* Creates a queue on heap */
-    q->req_queue = (char **)malloc(sizeof(char*) * size);
+    q->req_queue = (char (*)[REQ_SIZE])malloc(sizeof(char[REQ_SIZE]) * size);
     q->time_queue = (time_t *)malloc(sizeof(time_t) * size);
-    for (int i = 0; i < size; i++) {
-        q->req_queue[i] = (char *)malloc(sizeof(char) * buf_size);
-    }
     q->size = size;
-    q->buf_size = buf_size;
+    q->buf_size = REQ_SIZE;
     pthread_mutex_init(&q->lock, NULL);
 
     q->writtencond = cond;

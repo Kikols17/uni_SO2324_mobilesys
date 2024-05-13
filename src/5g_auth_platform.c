@@ -406,7 +406,7 @@ int parallel_AuthorizationRequestManager() {
     child_count = 0;                                                        // } new process, no children
     memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));   // }
 
-    AE_unpipes = (int(*)[2]) malloc(sizeof(int[2]) * settings.AUTH_SERVERS+1);
+    AE_unpipes = (int(*)[2])malloc(sizeof(int[2]) * settings.AUTH_SERVERS+1);
 
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_request_manager);
@@ -419,8 +419,8 @@ int parallel_AuthorizationRequestManager() {
     pthread_cond_t written = PTHREAD_COND_INITIALIZER, state = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t written_lock = PTHREAD_MUTEX_INITIALIZER, state_lock = PTHREAD_MUTEX_INITIALIZER;
     int state_var = 0;
-    create_queue(&q[0], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock, &state_var, &state, &state_lock);
-    create_queue(&q[1], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock, &state_var, &state, &state_lock);
+    create_queue(&q[0], settings.QUEUE_POS, &written, &written_lock, &state_var, &state, &state_lock);
+    create_queue(&q[1], settings.QUEUE_POS, &written, &written_lock, &state_var, &state, &state_lock);
 
     
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
@@ -504,7 +504,7 @@ int parallel_AuthorizationEngine(int n) {
     struct message msg; int cli_pid;
     while (running) {       // "running" is to make the AE not exit during an operation
         // read from unnamed pipe AE_unpipes[n-1][0]
-        read_n = read(AE_unpipes[n-1][0], request, BUF_SIZE);
+        read_n = read(AE_unpipes[id-1][0], request, REQ_SIZE);
         if (read_n==0) {
             // if read returns 0, pipe is closed, exit
             break;
@@ -514,6 +514,7 @@ int parallel_AuthorizationEngine(int n) {
         if (cli_pid==-1) {
             break;
         }
+        usleep(1000*settings.AUTH_PROC_TIME);    // sleep for AUTH_PROC_TIME millis
         if (response[0]!='\0') {
             // if response is not NULL, send response to client
             //printf("[AE %d] RESPONDING TO %d-\"%s\"\n", id, cli_pid, response);
@@ -698,7 +699,7 @@ void *sender_ARM( void *arg ) {
                 }
                 if (child_pids[next_AE]!=-1) {
                     // if AE is alive
-                    if (write(AE_unpipes[next_AE][1], request, strlen(request)+1) == -1) {
+                    if (write(AE_unpipes[next_AE][1], request, REQ_SIZE) == -1) {
                         // if write fails, AE might be dead, or pipe full
                         sprintf(logbuffer, "[FAILURE] UNPIPE TO AE BROKEN OR FULL %d, SKIPPING", next_AE);
                         append_logfile(logbuffer);
@@ -751,7 +752,7 @@ int kill_allchildren(int ARM_flag) {
 
 int handle_request(int id, char *request, char* response) {
     /* Handles request, returns client PID */
-    char aux[BUF_SIZE];
+    char aux[REQ_SIZE];
     char log_message[BUF_SIZE];
     strcpy(aux, request);
 
@@ -763,6 +764,7 @@ int handle_request(int id, char *request, char* response) {
     if (pid==NULL) {
         return -1;
     }
+    //printf("REQUEST: %s\n", request);
     if (arg1!=NULL) {
         if (arg2!=NULL) {
             /* Two args, must be mobile data request */
@@ -770,6 +772,8 @@ int handle_request(int id, char *request, char* response) {
             if (ans==0) {
                 // plafond is enough
                 response[0] = '\0';
+                sprintf(log_message, "AUTHORIZATION ENGINE %d ACCEPTING CLIENT %d REQUEST %s %s", id, atoi(pid), arg1, arg2);
+                append_logfile(log_message);
             } else if (ans==1) {
                 // plafond is not enough
                 delete_client(atoi(pid));

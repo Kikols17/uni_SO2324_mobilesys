@@ -7,8 +7,12 @@
 
 #include <pthread.h>
 
+#ifndef REQ_SIZE
+#define REQ_SIZE 64
+#endif
+
 typedef struct queue {
-    char **req_queue;
+    char (*req_queue)[REQ_SIZE];
     clock_t *time_queue;
     int size;
     int buf_size;
@@ -26,7 +30,7 @@ typedef struct queue {
 } queue;
 
 
-void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock, int *state, pthread_cond_t *statecond, pthread_mutex_t *statecond_lock);
+void create_queue(queue *q, int size, pthread_cond_t *cond, pthread_mutex_t *cond_lock, int *state, pthread_cond_t *statecond, pthread_mutex_t *statecond_lock);
 // void destroy_queue(queue *q);
 
 int count_queue(queue *q);
