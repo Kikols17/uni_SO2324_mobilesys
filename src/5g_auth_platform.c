@@ -101,6 +101,7 @@ typedef struct Settings {
 
 typedef struct User_data {
     int id;                     // pid of mobile user
+    int flag;                   // flag to check if plaffond has to be reported
     int init_plafond;           // initial plafond
     int plafond_left;           // plafond left ( >= 0 disconnect )
 } User_data;
@@ -782,21 +783,41 @@ int handle_request(int id, char *request, char* response) {
                 append_logfile(log_message);
             }
 
+
         } else {
             /* one arg, must be either attempt to connect to system by mobile, or backend request */
-            if (create_client(atoi(pid), atoi(arg1))==0) {
-                // client created
-                sprintf(response, "ACCEPT");
-                sprintf(log_message, "AUTHORIZATION ENGINE %d ACCEPTING NEW CLIENT %d", id, atoi(pid));
-                append_logfile(log_message);
-                //printf("CREATING CLIENT\n");
+            if (arg1[0]>='0' && arg1[0]<='9') {
+                // mobile data request
+                if (create_client(atoi(pid), atoi(arg1))==0) {
+                    // client created
+                    sprintf(response, "ACCEPT");
+                    sprintf(log_message, "AUTHORIZATION ENGINE %d ACCEPTING NEW CLIENT %d WITH PLAFOND %d.", id, atoi(pid), atoi(arg1));
+                    append_logfile(log_message);
+                    //printf("CREATING CLIENT\n");
+                } else {
+                    // client already exists / could not create client
+                    sprintf(response, "REJECT");
+                    sprintf(log_message, "AUTHORIZATION ENGINE %d REJECTING NEW CLIENT %d", id, atoi(pid));
+                    append_logfile(log_message);
+                    //printf("REJECTING\n");
+                }
             } else {
-                // client already exists / could not create client
-                sprintf(response, "REJECT");
-                sprintf(log_message, "AUTHORIZATION ENGINE %d REJECTING NEW CLIENT %d", id, atoi(pid));
-                append_logfile(log_message);
-                //printf("REJECTING\n");
+                // backoffice order
+                if ( strcmp(arg1, "reset")==0 ) {
+                    // reset
+                    printf("RESET\n");
+                    sprintf(response, "RESET");
+                } else if ( strcmp(arg1, "data_stats")==0 ) {
+                    // data_stats
+                    printf("DATA_STATS\n");
+                    sprintf(response, "DATA_STATS");
+                } else {
+                    // unknown order
+                    printf("UNKNOWN\n");
+                    sprintf(response, "NON-VALID REQUEST \"%s\".", arg1);
+                }
             }
+
         }
     }
 
