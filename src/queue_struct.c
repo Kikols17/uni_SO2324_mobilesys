@@ -16,7 +16,7 @@
 
 
 
-void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock) {
+void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock, int *state ,pthread_cond_t *statecond, pthread_mutex_t *statecond_lock) {
     /* Creates a queue on heap */
     q->req_queue = (char **)malloc(sizeof(char*) * size);
     q->time_queue = (time_t *)malloc(sizeof(time_t) * size);
@@ -26,8 +26,14 @@ void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthrea
     q->size = size;
     q->buf_size = buf_size;
     pthread_mutex_init(&q->lock, NULL);
-    q->cond = cond;
-    q->cond_lock = cond_lock;
+
+    q->writtencond = cond;
+    q->writtencond_lock = cond_lock;
+
+    q->state = state;
+    q->statecond = statecond;
+    q->statecond_lock = statecond_lock;
+
     q->read_index = 0;
     q->write_index = 0;
     q->count = 0;
@@ -60,22 +66,32 @@ int count_queue(queue *q) {
 
 int write_queue(queue *q, char *msg) {
     /* Writes a message to the queue
-     * returns 0 if successful, 1 if queue is full
+     *      returns 0 if successful, 1 if queue is full
      */
     pthread_mutex_lock(&q->lock);
     if (q->count == q->size) {
+        // queue is full
         pthread_mutex_unlock(&q->lock);
+
+        pthread_mutex_lock(q->statecond_lock);
+        if (*q->state==0) {
+            // change state to 1 and signal, to create extra AE
+            pthread_cond_signal(q->statecond);          // } Signal state change
+            *q->state=1;                                // }
+        }
+        pthread_mutex_unlock(q->statecond_lock);
         return 1;
     }
+
     strcpy(q->req_queue[q->write_index], msg);      // }
     q->time_queue[q->write_index] = clock();        // } Write the message and time
 
-    q->write_index = (q->write_index + 1) % q->size;
+    q->write_index = (q->write_index+1) % q->size;
     q->count++;
 
-    pthread_mutex_lock(q->cond_lock);   // }
-    pthread_cond_signal(q->cond);       // } Signal the condition variable
-    pthread_mutex_unlock(q->cond_lock); // }
+    pthread_mutex_lock(q->writtencond_lock);    // }
+    pthread_cond_signal(q->writtencond);        // } Signal the condition variable
+    pthread_mutex_unlock(q->writtencond_lock);  // }
 
     pthread_mutex_unlock(&q->lock);
     return 0;
@@ -88,9 +104,18 @@ int read_queue(queue *q, char *msg, clock_t *timeout) {
      */
     pthread_mutex_lock(&q->lock);
     if (q->count == 0) {
+        // queue is empty
         pthread_mutex_unlock(&q->lock);
         return 1;
+
+    } else if (*q->state==1 && q->count==q->size/2) {
+        // change state to 0 and signal, to destroy extra AE
+        pthread_mutex_lock(q->statecond_lock);
+        pthread_cond_signal(q->statecond);          // } Signal state change
+        *q->state=0;                                // }
+        pthread_mutex_unlock(q->statecond_lock);
     }
+
     strcpy(msg, q->req_queue[q->read_index]);   // }
     *timeout = q->time_queue[q->read_index];    // } Read the message and time
 

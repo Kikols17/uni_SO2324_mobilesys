@@ -13,15 +13,20 @@ typedef struct queue {
     int size;
     int buf_size;
     pthread_mutex_t lock;
-    pthread_cond_t *cond;       // } pointer to the condition variable that will be used
-    pthread_mutex_t *cond_lock; // } to signal the condition
+    pthread_cond_t *writtencond;        // } pointer to the condition variable that signals written that will be used
+    pthread_mutex_t *writtencond_lock;  // } to signal the condition
+
+    int *state;                             // } pointer to the state of the queue (0-normal, 1-need extra AE)
+    pthread_cond_t *statecond;               // } pointer to the condition variable that signals half-full that will be used
+    pthread_mutex_t *statecond_lock;         // } to signal the condition
+
     int read_index;
     int write_index;
     int count;          // Number of messages in the queue
 } queue;
 
 
-void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock);
+void create_queue(queue *q, int size, int buf_size, pthread_cond_t *cond, pthread_mutex_t *cond_lock, int *state, pthread_cond_t *statecond, pthread_mutex_t *statecond_lock);
 // void destroy_queue(queue *q);
 
 int count_queue(queue *q);

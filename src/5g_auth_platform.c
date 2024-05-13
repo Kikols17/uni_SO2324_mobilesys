@@ -181,6 +181,7 @@ int main(int argc, char *argv[]) {
 
     /* Create shared memory */
     if ( create_sharedmem()!=0 ) {
+        fprintf(stderr, "ERROR CAN'T CREATE SHARED MEMORY\n");
         system_panic(-1);
     }
 
@@ -414,13 +415,15 @@ int parallel_AuthorizationRequestManager() {
 
     // Create queues
     queue q[2];
-    pthread_cond_t written = PTHREAD_COND_INITIALIZER;
-    pthread_mutex_t written_lock = PTHREAD_MUTEX_INITIALIZER;
-    create_queue(&q[0], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock);
-    create_queue(&q[1], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock);
+    pthread_cond_t written = PTHREAD_COND_INITIALIZER, state = PTHREAD_COND_INITIALIZER;
+    pthread_mutex_t written_lock = PTHREAD_MUTEX_INITIALIZER, state_lock = PTHREAD_MUTEX_INITIALIZER;
+    int state_var = 0;
+    create_queue(&q[0], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock, &state_var, &state, &state_lock);
+    create_queue(&q[1], settings.QUEUE_POS, BUF_SIZE, &written, &written_lock, &state_var, &state, &state_lock);
 
     
     for (int i=0; i<settings.AUTH_SERVERS; i++) {
+        // create unnamed pipes for each AE, and create AEs
         if (pipe(AE_unpipes[i])<0) {
             append_logfile("[ERROR] COULD NOT CREATE UNNAMED PIPE FOR AE\n");
             system_panic();
@@ -430,6 +433,36 @@ int parallel_AuthorizationRequestManager() {
 
     pthread_create(&reciever, NULL, receiver_ARM, q);
     pthread_create(&sender, NULL, sender_ARM, q);
+
+    // Handle extra AE creation
+    pthread_mutex_lock(q[0].statecond_lock);
+    while (1) {
+        break;
+        pthread_cond_wait(q[0].statecond, q[0].statecond_lock);
+        append_logfile("STATECOND SIGNAL RECEIVED");
+        if (*q[0].state==1) {
+            append_logfile("state=1");
+            // create extra AE
+            if (pipe(AE_unpipes[settings.AUTH_SERVERS])<0) {
+                append_logfile("[ERROR] COULD NOT CREATE UNNAMED PIPE FOR EXTRA AE\n");
+                system_panic();
+            }
+            parallel_AuthorizationEngine(settings.AUTH_SERVERS+1);
+            append_logfile("EXTRA AUTHORIZATION_ENGINE CREATED");
+        } else {
+            printf("[FLAG] state=%d\n", *q[0].state);
+            append_logfile("state=0");
+            // destroy extra AE
+            child_pids[settings.AUTH_SERVERS] = -1;
+            child_count--;
+            kill(child_pids[settings.AUTH_SERVERS], SIGQUIT);
+            write(AE_unpipes[settings.AUTH_SERVERS][1], "-1#", 4);  // dummy request to flush AE pipes
+            waitpid(child_pids[settings.AUTH_SERVERS], NULL, 0);
+            append_logfile("EXTRA AUTHORIZATION_ENGINE DESTROYED");
+        }
+    }
+    pthread_mutex_unlock(q[0].statecond_lock);
+
     pthread_join(reciever, NULL);
     pthread_join(sender, NULL);
 
@@ -450,7 +483,7 @@ int parallel_AuthorizationEngine(int n) {
         return 0;
     }
     memset(process_name, '\0', max_processname_size);   // }
-    strcpy(process_name, "AUTH_ENGINE");                // } change process name to AE
+    sprintf(process_name, "AUTH_ENGINE%d", n);          // } change process name to AEn
 
     child_count = 0;                                                        // } new process, no children
     memset(child_pids, -1, sizeof(int) * MAX(settings.AUTH_SERVERS+1,2));   // }
@@ -536,11 +569,11 @@ void *receiver_ARM( void *arg ) {
 
     if ( (mkfifo(BACKEND_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
         // Creates the BACKEND named pipe if it doesn't exist yet
-        perror("Cannot create pipe: ");
+        append_logfile("[ERROR] COULD NOT CREATE BACKEND PIPE");
         system_panic();
     } else if ((backend_pipe_fd = open(BACKEND_PIPE, O_RDWR)) < 0) {
         // Opens BACKEND named pipe for reading
-        perror("Cannot open pipe for reading: ");
+        append_logfile("[ERROR] COULD NOT OPEN BACKEND PIPE");
         system_panic();
     } else {
         append_logfile("BACKEND PIPE CREATED");
@@ -548,11 +581,11 @@ void *receiver_ARM( void *arg ) {
 
     if ( (mkfifo(MOBILE_PIPE, O_CREAT|O_EXCL|0600)<0) && (errno!=EEXIST) ) {
         // Creates the BACKEND named pipe if it doesn't exist yet
-        perror("Cannot create pipe: ");
+        append_logfile("[ERROR] COULD NOT CREATE MOBILEUSER PIPE");
         system_panic();
     } else if ((mobile_pipe_fd = open(MOBILE_PIPE, O_RDWR)) < 0) {
         // Opens BACKEND named pipe for reading
-        perror("Cannot open pipe for reading: ");
+        append_logfile("[ERROR] COULD NOT OPEN MOBILEUSER PIPE");
         system_panic();
     } else {
         append_logfile("MOBILEUSER PIPE CREATED");
@@ -620,9 +653,9 @@ void *sender_ARM( void *arg ) {
     int next_AE = 0;
     while (1) {
         // Wait for a signal to read from the queues
-        pthread_mutex_lock(video_queue->cond_lock);
-        pthread_cond_wait(video_queue->cond, video_queue->cond_lock);
-        pthread_mutex_unlock(video_queue->cond_lock);
+        pthread_mutex_lock(video_queue->writtencond_lock);
+        pthread_cond_wait(video_queue->writtencond, video_queue->writtencond_lock);
+        pthread_mutex_unlock(video_queue->writtencond_lock);
 
         while (1) {
             // read until BOTH queues are empty
@@ -665,10 +698,11 @@ void *sender_ARM( void *arg ) {
                 if (child_pids[next_AE]!=-1) {
                     // if AE is alive
                     if (write(AE_unpipes[next_AE][1], request, strlen(request)+1) == -1) {
-                        // if write fails, AE is dead, kill it
-                        append_logfile("[FAILURE] UNPIPE TO AE BROKEN, KILLING AE");
-                        kill(child_pids[next_AE], SIGQUIT);
-                        child_pids[next_AE] = -1;
+                        // if write fails, AE might be dead, or pipe full
+                        sprintf(logbuffer, "[FAILURE] UNPIPE TO AE BROKEN OR FULL %d, SKIPPING", next_AE);
+                        append_logfile(logbuffer);
+                        next_AE++;
+                        continue;
                     }
 
                     next_AE++;
@@ -703,7 +737,7 @@ int check_requesttype(char *request) {
 
 int kill_allchildren(int ARM_flag) {
     /* Kills all child processes */
-    for (int i=0; i<settings.AUTH_SERVERS+1; i++) {
+    for (int i=0; i<MAX(settings.AUTH_SERVERS+1, 2); i++) {
         if (child_pids[i]==-1) {
             continue;
         }
