@@ -59,7 +59,8 @@ void close_authorization_request_manager();
 void close_authorization_engine();
 
 // Create shared memory
-int create_sharedmem();
+int create_usershmem();
+int create_AEsshmem();
 
 /* Creates child proccesses parallel to the parent proccess
  * parallel_AuthorizationRequestManager creates ARM
@@ -116,9 +117,12 @@ int system_manager_pid;
 int running = 1;
 
 // Shared memory stuff
-sem_t *user_sem;
-int shmid;
-User_data *user_array;
+sem_t *user_sem;        // }
+int user_shmid;         // } used to handle users
+User_data *user_array;  // }
+sem_t *AEs_sem;             // }
+int AEs_shmid;              // } used to handle AEs, 0 means ready, 1 means busy
+int *AEs_array;             // }
 
 // Store child pids of the given process
 int child_count;
@@ -181,7 +185,7 @@ int main(int argc, char *argv[]) {
     }
 
     /* Create shared memory */
-    if ( create_sharedmem()!=0 ) {
+    if ( create_usershmem()!=0 ) {
         fprintf(stderr, "ERROR CAN'T CREATE SHARED MEMORY\n");
         system_panic(-1);
     }
@@ -239,6 +243,7 @@ int validate_settings() {
 void system_panic() {
     /* Can be called by any process to make SYSTEM_MANAGER panic, and stop all operations */
     kill(system_manager_pid, SIGQUIT);
+    while (1) { sleep(1); }     // wait to be killed
 }
 
 void close_system_manager(int sigint) {
@@ -264,7 +269,7 @@ void close_system_manager(int sigint) {
     sem_close(user_sem);            // }
     sem_unlink("user_sem");         // } unlink and close user_sem
     shmdt(user_array);                  // }
-    shmctl(shmid, IPC_RMID, 0);         // } free shared memory
+    shmctl(user_shmid, IPC_RMID, 0);    // } free shared memory
 
     exit(0);
 }
@@ -295,6 +300,11 @@ void close_authorization_request_manager() {
         close(AE_unpipes[i][1]);
     }
 
+    sem_close(AEs_sem);         // }
+    sem_unlink("AEs_sem");      // } unlink and close AEs_sem
+    shmdt(AEs_array);               // }
+    shmctl(AEs_shmid, IPC_RMID, 0); // } free shared memory
+
     append_logfile("AUTHORIZATION_REQUEST_MANAGER CLOSING");
 
     exit(0);
@@ -309,14 +319,14 @@ void close_authorization_engine() {
 
 
 
-int create_sharedmem() {
+int create_usershmem() {
     /* Create sharedmemory (user_array) */
-    shmid = shmget(IPC_PRIVATE, sizeof(User_data) * settings.MOBILE_USERS, IPC_CREAT | 0777);
-    if (shmid == -1) {
+    user_shmid = shmget(IPC_PRIVATE, sizeof(User_data) * settings.MOBILE_USERS, IPC_CREAT | 0777);
+    if (user_shmid == -1) {
         fprintf(stderr, "[ERROR] Could not create shared memory\n");
         return 1;
     }
-    user_array = (User_data*) shmat(shmid, NULL, 0);
+    user_array = (User_data*) shmat(user_shmid, NULL, 0);
     if (user_array == (void*)-1) {
         fprintf(stderr, "[ERROR] Could not assign shared memory\n");
         return 1;
@@ -333,6 +343,28 @@ int create_sharedmem() {
     return 0;
 }
 
+int create_AEsshmem() {
+    /* Create sharedmemory (AEs_array) */
+    AEs_shmid = shmget(IPC_PRIVATE, sizeof(int) * settings.AUTH_SERVERS, IPC_CREAT | 0777);
+    if (AEs_shmid == -1) {
+        fprintf(stderr, "[ERROR] Could not create shared memory\n");
+        return 1;
+    }
+    AEs_array = (int*) shmat(AEs_shmid, NULL, 0);
+    if (AEs_array == (void*)-1) {
+        fprintf(stderr, "[ERROR] Could not assign shared memory\n");
+        return 1;
+    }
+
+    // set AEs_array to default value
+    sem_wait(AEs_sem);
+    for (int i=0; i<settings.AUTH_SERVERS+1; i++) {
+        AEs_array[i] = 0;
+    }
+    sem_post(AEs_sem);
+
+    return 0;
+}
 
 
 int append_logfile(char *log_info) {
@@ -408,11 +440,26 @@ int parallel_AuthorizationRequestManager() {
 
     AE_unpipes = (int(*)[2])malloc(sizeof(int[2]) * settings.AUTH_SERVERS+1);
 
+    char logbuffer[BUF_SIZE];
+
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_request_manager);
 
     pthread_t reciever, sender;
     append_logfile("PROCESS AUTHORIZATION_REQUEST_MANAGER CREATED");
+
+    // Create semaphore for AEs
+    AEs_sem = sem_open("AEs_sem", O_CREAT, 0777, 1);
+    if ( AEs_sem==SEM_FAILED ) {
+        append_logfile("[ERROR] COULD NOT CREATE SHM SEMAPHORE FOR AE's");
+        system_panic();
+    }
+
+    // Create shared memory for AEs
+    if ( create_AEsshmem()!=0 ) {
+        append_logfile("[ERROR] COULD NOT CREATE SHARED MEMORY FOR AE's");
+        system_panic();
+    }
 
     // Create queues
     queue q[2];
@@ -437,12 +484,12 @@ int parallel_AuthorizationRequestManager() {
 
     // Handle extra AE creation
     pthread_mutex_lock(q[0].statecond_lock);
+    int extra_AE_pid = -1;
     while (1) {
-        break;
         pthread_cond_wait(q[0].statecond, q[0].statecond_lock);
-        append_logfile("STATECOND SIGNAL RECEIVED");
+        //sprintf(logbuffer, "STATECOND SIGNAL RECEIVED, signal=%d\n", *q[0].state);
+        append_logfile(logbuffer);
         if (*q[0].state==1) {
-            append_logfile("state=1");
             // create extra AE
             if (pipe(AE_unpipes[settings.AUTH_SERVERS])<0) {
                 append_logfile("[ERROR] COULD NOT CREATE UNNAMED PIPE FOR EXTRA AE\n");
@@ -451,14 +498,17 @@ int parallel_AuthorizationRequestManager() {
             parallel_AuthorizationEngine(settings.AUTH_SERVERS+1);
             append_logfile("EXTRA AUTHORIZATION_ENGINE CREATED");
         } else {
-            printf("[FLAG] state=%d\n", *q[0].state);
-            append_logfile("state=0");
             // destroy extra AE
-            child_pids[settings.AUTH_SERVERS] = -1;
-            child_count--;
-            kill(child_pids[settings.AUTH_SERVERS], SIGQUIT);
+            extra_AE_pid = child_pids[settings.AUTH_SERVERS];
+            if (extra_AE_pid==-1) {
+                append_logfile("[ERROR] TRYING TO KILL NON-EXISTENT EXTRA AE, PANIC! (i thought i fixed this D: )");
+                system_panic();
+            }
+            child_pids[settings.AUTH_SERVERS] = -1;     // } mark as dead so no more requests come in
+            child_count--;                              // }
+            kill(extra_AE_pid, SIGQUIT);
             write(AE_unpipes[settings.AUTH_SERVERS][1], "-1#", 4);  // dummy request to flush AE pipes
-            waitpid(child_pids[settings.AUTH_SERVERS], NULL, 0);
+            waitpid(extra_AE_pid, NULL, 0);
             append_logfile("EXTRA AUTHORIZATION_ENGINE DESTROYED");
         }
     }
@@ -479,6 +529,7 @@ int parallel_AuthorizationEngine(int n) {
         return 1;
     } else if (pid!=0) {
         // if pid=0, parent process, save child pid to child_pids and return
+        AEs_array[n-1] = 0;
         child_pids[child_count] = pid;
         child_count++;
         return 0;
@@ -502,26 +553,27 @@ int parallel_AuthorizationEngine(int n) {
     int read_n;
     char request[BUF_SIZE], response[BUF_SIZE];
     struct message msg; int cli_pid;
-    while (running) {       // "running" is to make the AE not exit during an operation
+    while (running==1) {        // "running" is to make the AE not exit during an operation
         // read from unnamed pipe AE_unpipes[n-1][0]
         read_n = read(AE_unpipes[id-1][0], request, REQ_SIZE);
+        //printf("recieved %d bytes\n", read_n);
         if (read_n==0) {
             // if read returns 0, pipe is closed, exit
             break;
         }
         //printf("[AE %d] %s\n", id, request);
         cli_pid = handle_request(id, request, response);
-        if (cli_pid==-1) {
-            break;
-        }
         usleep(1000*settings.AUTH_PROC_TIME);    // sleep for AUTH_PROC_TIME millis
-        if (response[0]!='\0') {
+        if (response[0]!='\0' && cli_pid!=-1) {
             // if response is not NULL, send response to client
             //printf("[AE %d] RESPONDING TO %d-\"%s\"\n", id, cli_pid, response);
             msg.mtype = cli_pid;
             strcpy(msg.mtext, response);
             msgsnd(message_queue_id, &msg, sizeof(msg), 0);
         }
+        sem_wait(AEs_sem);
+        AEs_array[id-1] = 0;
+        sem_post(AEs_sem);
     }
     exit(0);    // AE exits on it's own terms
 }
@@ -664,16 +716,15 @@ void *sender_ARM( void *arg ) {
             if (count_queue(video_queue)>0) {
                 // Priority to video queue
                 read_queue(video_queue, request, &req_time);
-                //printf("[READ-VIDEO] %s\n", request);
             } else if (count_queue(others_queue)>0) {
                 // If video queue is empty, others queue must have smth
                 read_queue(others_queue, request, &req_time);
-                //printf("[READ-OTHERS] %s\n", request);
             } else {
                 // If both queues are empty, wait for a signal
                 break;
             }
 
+            /* Discard Timed-out requests */
             if (clock()-req_time > settings.MAX_VIDEO_WAIT && check_requesttype(request) ) {
                 // if request is video, and has waited too long, discard
                 sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %ldms, DISCARDING", request, clock()-req_time);
@@ -697,18 +748,28 @@ void *sender_ARM( void *arg ) {
                     // wrap around child_pids
                     next_AE = 0;
                 }
-                if (child_pids[next_AE]!=-1) {
+                //printf("TRYING TO SEND TO AE %d with pid %d\n", next_AE, child_pids[next_AE]);
+                sem_wait(AEs_sem);
+                if (child_pids[next_AE]>0 && AEs_array[next_AE]==0) {
                     // if AE is alive
+                    sem_post(AEs_sem);
                     if (write(AE_unpipes[next_AE][1], request, REQ_SIZE) == -1) {
                         // if write fails, AE might be dead, or pipe full
                         sprintf(logbuffer, "[FAILURE] UNPIPE TO AE BROKEN OR FULL %d, SKIPPING", next_AE);
                         append_logfile(logbuffer);
+                        //printf("AE %d with pid %d\n", next_AE, child_pids[next_AE]);
                         next_AE++;
                         continue;
                     }
+                    sem_wait(AEs_sem);
+                    AEs_array[next_AE] = 1;
+                    sem_post(AEs_sem);
 
                     next_AE++;
                     break;
+                } else {
+                    // if AE is dead, or busy, try next
+                    sem_post(AEs_sem);
                 }
                 next_AE++;
             }
@@ -772,8 +833,8 @@ int handle_request(int id, char *request, char* response) {
             if (ans==0) {
                 // plafond is enough
                 response[0] = '\0';
-                sprintf(log_message, "AUTHORIZATION ENGINE %d ACCEPTING CLIENT %d REQUEST %s %s", id, atoi(pid), arg1, arg2);
-                append_logfile(log_message);
+                //sprintf(log_message, "AUTHORIZATION ENGINE %d ACCEPTING CLIENT %d REQUEST %s %s", id, atoi(pid), arg1, arg2);
+                //append_logfile(log_message);
             } else if (ans==1) {
                 // plafond is not enough
                 delete_client(atoi(pid));

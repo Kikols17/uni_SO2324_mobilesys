@@ -65,11 +65,12 @@ int write_queue(queue *q, char *msg) {
     /* Writes a message to the queue
      *      returns 0 if successful, 1 if queue is full
      */
-    pthread_mutex_lock(&q->lock);
-    if (q->count == q->size) {
-        // queue is full
-        pthread_mutex_unlock(&q->lock);
+    pthread_mutex_lock(q->writtencond_lock);    // }
+    pthread_cond_signal(q->writtencond);        // } Signal the condition variable
+    pthread_mutex_unlock(q->writtencond_lock);  // }
 
+    if (count_queue(q) == q->size) {
+        // queue is full
         pthread_mutex_lock(q->statecond_lock);
         if (*q->state==0) {
             // change state to 1 and signal, to create extra AE
@@ -84,12 +85,9 @@ int write_queue(queue *q, char *msg) {
     q->time_queue[q->write_index] = clock();        // } Write the message and time
 
     q->write_index = (q->write_index+1) % q->size;
+
+    pthread_mutex_lock(&q->lock);
     q->count++;
-
-    pthread_mutex_lock(q->writtencond_lock);    // }
-    pthread_cond_signal(q->writtencond);        // } Signal the condition variable
-    pthread_mutex_unlock(q->writtencond_lock);  // }
-
     pthread_mutex_unlock(&q->lock);
     return 0;
 }
@@ -99,24 +97,24 @@ int read_queue(queue *q, char *msg, clock_t *timeout) {
      * returns 0 if successful, 1 if queue is empty (should never ask to read from an empty queue, but anyway)
      * copies the message to "msg" buffer
      */
-    pthread_mutex_lock(&q->lock);
-    if (q->count == 0) {
-        // queue is empty
-        pthread_mutex_unlock(&q->lock);
-        return 1;
-
-    } else if (*q->state==1 && q->count==q->size/2) {
+    pthread_mutex_lock(q->statecond_lock);
+    if (*q->state==1 && count_queue(q)<=q->size/2) {
         // change state to 0 and signal, to destroy extra AE
-        pthread_mutex_lock(q->statecond_lock);
         pthread_cond_signal(q->statecond);          // } Signal state change
         *q->state=0;                                // }
-        pthread_mutex_unlock(q->statecond_lock);
+    }
+    pthread_mutex_unlock(q->statecond_lock);
+    if (q->count == 0) {
+        // queue is empty
+        return 1;
     }
 
     strcpy(msg, q->req_queue[q->read_index]);   // }
     *timeout = q->time_queue[q->read_index];    // } Read the message and time
 
     q->read_index = (q->read_index + 1) % q->size;
+
+    pthread_mutex_lock(&q->lock);
     q->count--;
     pthread_mutex_unlock(&q->lock);
     return 0;
