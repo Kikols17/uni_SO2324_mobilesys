@@ -778,7 +778,7 @@ int handle_request(int id, char *request, char* response) {
                 append_logfile(log_message);
             } else {
                 // client does not exist
-                response[0] = '\0';
+                sprintf(response, "REJECT");
                 sprintf(log_message, "AUTHORIZATION ENGINE %d CLIENT %d NOT FOUND", id, atoi(pid));
                 append_logfile(log_message);
             }
