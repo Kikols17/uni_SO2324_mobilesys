@@ -152,6 +152,8 @@ int message_queue_id;
 int max_processname_size;
 char *process_name;
 
+FILE *logfd;
+
 
 int main(int argc, char *argv[]) {
     system_manager_pid = getpid();
@@ -215,6 +217,14 @@ int main(int argc, char *argv[]) {
 
     int reset_stats();
 
+
+    /* Open log FILE */
+    logfd = fopen(LOG_FILE, "a");
+    if (logfd==NULL) {
+        // Could not open file
+        fprintf(stderr, "[ERROR] Could not open file \"%s\".\n", LOG_FILE);
+        exit(1);
+    }
     
 
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
@@ -291,6 +301,9 @@ void close_system_manager(int sigint) {
 
     append_logfile("5G_AUTH_PLATFORM SIMULATOR CLOSING\n"
                    "+----------------------------------------------------------------------+");
+
+    fclose(logfd);      // close logfile
+
     sem_close(log_sem);         // }
     sem_unlink("log_sem");      // } unlink and close log_sem
     sem_close(user_sem);            // }
@@ -420,8 +433,8 @@ int create_MEshmem() {
 
 int append_logfile(char *log_info) {
     sem_wait(log_sem);
-    FILE *log = fopen(LOG_FILE, "a");
-    if (log==NULL) {
+    //FILE *logf = fopen(LOG_FILE, "a");
+    if (logfd==NULL) {
         // Could not open file
         fprintf(stderr, "[ERROR] Could not open file \"%s\".\n", LOG_FILE);
         // Don't log error, obviously
@@ -436,10 +449,10 @@ int append_logfile(char *log_info) {
     time_struct = localtime(&posix_time);
 
     strftime(time_buffer, 80, "%X", time_struct);       // write time hour:min:sec
-    fprintf(log,    "%s %s\n", time_buffer, log_info);      // } Write log info to log.txt
+    fprintf(logfd,  "%s %s\n", time_buffer, log_info);      // } Write log info to log.txt
     fprintf(stdout, "%s %s\n", time_buffer, log_info);      // } and to terminal
 
-    fclose(log);
+    //fclose(logf);
     sem_post(log_sem);
     return 0;
 }
