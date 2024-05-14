@@ -78,6 +78,7 @@ int parallel_MonitorEngine();
  */
 void *receiver_ARM( void *arg );
 void *sender_ARM( void *arg );
+void *sender_ME();
 
 /* Utils */
 int check_requesttype(char *request);
@@ -663,6 +664,10 @@ int parallel_MonitorEngine() {
     message msg;
 
     append_logfile("PROCESS MONITOR_ENGINE CREATED");
+
+    pthread_t sender;
+    pthread_create(&sender, NULL, sender_ME, NULL);
+
     //pthread_mutex_lock(&(monitor_stuff->ME_lock));
     while (1) {
         //pthread_cond_wait(&(monitor_stuff->ME_cond), &(monitor_stuff->ME_lock));
@@ -706,6 +711,8 @@ int parallel_MonitorEngine() {
         }
         sem_post(user_sem);
     }
+    
+    pthread_join(sender, NULL);
     //pthread_mutex_unlock(&(monitor_stuff->ME_lock));
     exit(0);
 }
@@ -883,6 +890,24 @@ void *sender_ARM( void *arg ) {
     return NULL;
 }
 
+void *sender_ME() {
+    /* Sender (MONITOR_ENGINE) */
+    message msg;
+    char stats[BUF_SIZE];
+    int request_count, data_count;
+    append_logfile("THREAD SENDER_ME CREATED");
+
+    while(1) {
+        sleep(30);
+        msg.mtype = 1;
+        fetch_stats(&request_count, &data_count);
+        sprintf(stats, "Total requests: %d\tTotal data: %d", request_count, data_count);
+        strcpy(msg.mtext, stats);
+        append_logfile("SENDING SQUEDULED STATS TO BACKOFFICE");
+        msgsnd(message_queue_id, &msg, sizeof(msg), 0);        // send message to backoffice broadcast (1)
+    }
+    return NULL;
+}
 
 
 /* UTILS */
@@ -1066,11 +1091,9 @@ int create_client(int pid, int plafond) {
 
 int delete_client(int pid, int perm_flag) {
     /* Delete client */
-    printf("waiting for user_sem\n");
     if (!perm_flag) {
         sem_wait(user_sem);
     }
-    printf("user_sem locked\n");
     for (int i=0; i<settings.MOBILE_USERS; i++) {
         if (user_array[i].id==pid) {
             user_array[i].id = -1;

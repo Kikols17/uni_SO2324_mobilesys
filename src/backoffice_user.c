@@ -33,6 +33,7 @@ int auth5g_request(char *req_type);
 
 void *user_input();
 void *messagequeue_response();
+void *messagequeue_broadcast();
 
 
 int backendpipe_fd;
@@ -54,12 +55,14 @@ int main(int argc, char *argv[]) {
         exit(2);
     }
 
-    pthread_t user_input_thread, backend_response_thread;
+    pthread_t user_input_thread, backend_response_thread, backend_broadcast_thread;
     pthread_create(&user_input_thread, NULL, user_input, NULL);
     pthread_create(&backend_response_thread, NULL, messagequeue_response, NULL);
+    pthread_create(&backend_broadcast_thread, NULL, messagequeue_broadcast, NULL);
 
     pthread_join(user_input_thread, NULL);
     pthread_join(backend_response_thread, NULL);
+    pthread_join(backend_broadcast_thread, NULL);
 
     return 0;
 }
@@ -127,6 +130,20 @@ void *messagequeue_response() {
             exit(2);
         }
         printf("RECEIVED: \"%s\"\n", msg_in.mtext);
+    }
+    return NULL;
+}
+
+void *messagequeue_broadcast() {
+    /* Thread that reads the message queue */
+    message msg_in;
+
+    while (1) {
+        if (msgrcv(message_queue_id, &msg_in, sizeof(msg_in), 1, 0) < 0) {
+            fprintf(stderr, "[ERROR]: Cannot read from message queue\n");
+            exit(2);
+        }
+        printf("RECEIVED SQUEDULED: \"%s\"\n", msg_in.mtext);
     }
     return NULL;
 }
