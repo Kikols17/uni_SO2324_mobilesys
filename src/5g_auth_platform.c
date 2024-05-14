@@ -440,7 +440,7 @@ int parallel_AuthorizationRequestManager() {
 
     AE_unpipes = (int(*)[2])malloc(sizeof(int[2]) * settings.AUTH_SERVERS+1);
 
-    char logbuffer[BUF_SIZE];
+    //char logbuffer[BUF_SIZE];
 
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_authorization_request_manager);
@@ -708,7 +708,7 @@ void *sender_ARM( void *arg ) {
 
     char request[REQ_SIZE];
     char logbuffer[BUF_SIZE];
-    clock_t req_time;
+    unsigned long long req_time;
 
     int next_AE = 0;
     while (1) {
@@ -731,21 +731,21 @@ void *sender_ARM( void *arg ) {
             }
 
             /* Discard Timed-out requests */
-            if (clock()-req_time > settings.MAX_VIDEO_WAIT && check_requesttype(request) ) {
+            if (get_time_millis()-req_time > (unsigned long long)settings.MAX_VIDEO_WAIT && check_requesttype(request) ) {
                 // if request is video, and has waited too long, discard
-                sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %ldms, DISCARDING", request, clock()-req_time);
+                sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %lldms, DISCARDING", request, get_time_millis()-req_time);
                 append_logfile(logbuffer);
                 continue;
             } else {
                 //printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
             }
-            if (clock()-req_time > settings.MAX_OTHERS_WAIT && !check_requesttype(request) ) {
+            if (get_time_millis()-req_time > (unsigned long long)settings.MAX_OTHERS_WAIT && !check_requesttype(request) ) {
                 // if request is not video, and has waited too long, discard
-                sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %ldms, DISCARDING", request, clock()-req_time);
+                sprintf(logbuffer, "[TIMEOUT] VIDEO REQUEST \"%s\" TIMED OUT WITH %lldms, DISCARDING", request, get_time_millis()-req_time);
                 append_logfile(logbuffer);
                 continue;
             } else {
-                //printf("REQUEST: \"%s\" - timed %ld\n", request, clock()-req_time);
+                //printf("REQUEST: \"%s\" - timed %lld\n", request, get_time_millis()-req_time);
             }
 
             // Write to first "next" AE that is alive and free

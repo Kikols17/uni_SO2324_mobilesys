@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include <pthread.h>
 
@@ -13,7 +15,7 @@
 
 typedef struct queue {
     char (*req_queue)[REQ_SIZE];
-    clock_t *time_queue;
+    unsigned long long *time_queue;
     int size;
     int buf_size;
     pthread_mutex_t lock;
@@ -36,9 +38,9 @@ void create_queue(queue *q, int size, pthread_cond_t *cond, pthread_mutex_t *con
 int count_queue(queue *q);
 
 int write_queue(queue *q, char *msg);
-int read_queue(queue *q, char *msg, clock_t *time);
+int read_queue(queue *q, char *msg, unsigned long long *time);
 
 /* UTILS */
-unsigned long long get_time_millis()
+unsigned long long get_time_millis();
 
 #endif
