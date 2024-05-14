@@ -250,7 +250,7 @@ int response_handler(char *response) {
         fprintf(stdout, "[FROM SYS] Mobile user disconnected by system...\n");
         return -1;
     } else {
-        fprintf(stderr, "[ERROR]: Unknown response \"%s\"\n", response);
+        fprintf(stderr, "[FROM SYS] \"%s\"\n", response);
         return 1;
     }
     return 1;

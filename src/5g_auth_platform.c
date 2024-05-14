@@ -61,6 +61,7 @@ void close_authorization_engine();
 // Create shared memory
 int create_usershmem();
 int create_AEsshmem();
+int create_MEshmem();
 
 /* Creates child proccesses parallel to the parent proccess
  * parallel_AuthorizationRequestManager creates ARM
@@ -107,6 +108,11 @@ typedef struct User_data {
     int plafond_left;           // plafond left ( >= 0 disconnect )
 } User_data;
 
+typedef struct Monitor_stuff {
+    pthread_mutex_t ME_lock;
+    pthread_cond_t ME_cond;
+} Monitor_stuff;
+
 
 
 // General stuff
@@ -123,6 +129,10 @@ User_data *user_array;  // }
 sem_t *AEs_sem;             // }
 int AEs_shmid;              // } used to handle AEs, 0 means ready, 1 means busy
 int *AEs_array;             // }
+int monitor_shmid;              // } used to handle the monitor engine
+Monitor_stuff *monitor_stuff;   // }
+sem_t *ME_sem;                  // }
+
 
 // Store child pids of the given process
 int child_count;
@@ -184,8 +194,21 @@ int main(int argc, char *argv[]) {
         system_panic(-1);
     }
 
-    /* Create shared memory */
+    /* Create semaphore for ME */
+    ME_sem = sem_open("ME_sem", O_CREAT, 0777, 0);
+    if ( ME_sem==SEM_FAILED ) {
+        fprintf(stderr, "ERROR CAN'T CREATE SHM SEMAPHORE FOR ME\n");
+        system_panic(-1);
+    }
+
+    /* Create user shared memory */
     if ( create_usershmem()!=0 ) {
+        fprintf(stderr, "ERROR CAN'T CREATE SHARED MEMORY\n");
+        system_panic(-1);
+    }
+
+    /* Create Monitor Engine shared memory */
+    if ( create_MEshmem()!=0 ) {
         fprintf(stderr, "ERROR CAN'T CREATE SHARED MEMORY\n");
         system_panic(-1);
     }
@@ -270,6 +293,8 @@ void close_system_manager(int sigint) {
     sem_unlink("user_sem");         // } unlink and close user_sem
     shmdt(user_array);                  // }
     shmctl(user_shmid, IPC_RMID, 0);    // } free shared memory
+    shmdt(monitor_stuff);                   // }
+    shmctl(monitor_shmid, IPC_RMID, 0);     // } free shared memory
 
     exit(0);
 }
@@ -365,6 +390,28 @@ int create_AEsshmem() {
 
     return 0;
 }
+
+int create_MEshmem() {
+    /* Create sharedmemory (monitor_stuff) */
+    monitor_shmid = shmget(IPC_PRIVATE, sizeof(Monitor_stuff), IPC_CREAT | 0777);
+    if (monitor_shmid == -1) {
+        fprintf(stderr, "[ERROR] Could not create shared memory\n");
+        return 1;
+    }
+    monitor_stuff = (Monitor_stuff*) shmat(monitor_shmid, NULL, 0);
+    if (monitor_stuff == (void*)-1) {
+        fprintf(stderr, "[ERROR] Could not assign shared memory\n");
+        return 1;
+    }
+
+    // initialize monitor_stuff
+    pthread_mutex_init(&(monitor_stuff->ME_lock), NULL);
+    pthread_cond_init(&(monitor_stuff->ME_cond), NULL);
+
+    return 0;
+
+}
+
 
 
 int append_logfile(char *log_info) {
@@ -608,8 +655,55 @@ int parallel_MonitorEngine() {
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, close_monitor_engine);
 
+    int plafond_spend, plafond_init;
+    double plafond_percent;
+    message msg;
+
     append_logfile("PROCESS MONITOR_ENGINE CREATED");
-    while (1) {}        // TODO[META1] do MONITOR_ENGINE
+    //pthread_mutex_lock(&(monitor_stuff->ME_lock));
+    while (1) {
+        //pthread_cond_wait(&(monitor_stuff->ME_cond), &(monitor_stuff->ME_lock));
+        sem_wait(ME_sem);
+
+        sem_wait(user_sem);
+        for (int i=0; i<settings.MOBILE_USERS; i++) {
+            if (user_array[i].id!=-1 && user_array[i].flag==1) {
+                // if user is connected, and has flag to check plafond
+                plafond_init = user_array[i].init_plafond;
+                plafond_spend = plafond_init - user_array[i].plafond_left;
+                plafond_percent = (double)plafond_spend/(double)plafond_init;   // calculate plafond percentage spent
+
+                msg.mtype = user_array[i].id;       // so the message will reach the correct user
+                if ( plafond_percent >= 1 ) {
+                    // if plafond is spent, signal to user
+                    append_logfile("NOTIFYING USER OF DISCONNECT, PLAFOND 100% SPENT");
+                    sprintf(msg.mtext, "Plafond is 100%% spent, disconnecting...");
+                    msgsnd(message_queue_id, &msg, sizeof(msg), 0);
+                    sprintf(msg.mtext, "DISCONNECT");
+                    msgsnd(message_queue_id, &msg, sizeof(msg), 0);
+                    delete_client(user_array[i].id);
+
+                } else if ( plafond_percent >= 0.9 ) {
+                    // if plafond is 80% spent, signal to user
+                    sprintf(msg.mtext, "Plafond is 90%% spent, be careful...");
+                    msgsnd(message_queue_id, &msg, sizeof(msg), 0);
+                    append_logfile("NOTIFYING USER OF PLAFOND 90% SPENT");
+
+                } else if ( plafond_percent >= 0.8 ) {
+                    // if plafond is 50% spent, signal to user
+                    sprintf(msg.mtext, "Plafond is 80%% spent, be careful...");
+                    msgsnd(message_queue_id, &msg, sizeof(msg), 0);
+                    append_logfile("NOTIFYING USER OF PLAFOND 80% SPENT");
+
+                }
+                // else, do nothing
+                user_array[i].flag = 0;     // reset flag
+            }
+
+        }
+        sem_post(user_sem);
+    }
+    //pthread_mutex_unlock(&(monitor_stuff->ME_lock));
     exit(0);
 }
 
@@ -843,10 +937,11 @@ int handle_request(int id, char *request, char* response) {
                 //append_logfile(log_message);
             } else if (ans==1) {
                 // plafond is not enough
-                delete_client(atoi(pid));
-                sprintf(response, "DISCONNECT");
-                sprintf(log_message, "AUTHORIZATION ENGINE %d DISCONNECTING CLIENT %d", id, atoi(pid));
-                append_logfile(log_message);
+                //delete_client(atoi(pid));     // monitor engine now does this
+                response[0] = '\0';
+                //sprintf(response, "DISCONNECT");
+                //sprintf(log_message, "AUTHORIZATION ENGINE %d DISCONNECTING CLIENT %d", id, atoi(pid));
+                //append_logfile(log_message);
             } else {
                 // client does not exist
                 sprintf(response, "REJECT");
@@ -896,13 +991,38 @@ int handle_request(int id, char *request, char* response) {
 int check_plafond(int pid, int data) {
     /* Check if plafond is enough */
     sem_wait(user_sem);
+    int before_plafond = user_array[0].plafond_left;
     for (int i=0; i<settings.MOBILE_USERS; i++) {
         if (user_array[i].id==pid) {
             if (user_array[i].plafond_left >= data) {
                 user_array[i].plafond_left -= data;
+                if ( before_plafond > 0.1*user_array[i].init_plafond && user_array[i].plafond_left <= 0.1*user_array[i].init_plafond ) {
+                    // if plafond is 90% spent, signal to user
+                    user_array[i].flag = 1;
+                    //pthread_mutex_lock(&monitor_stuff->ME_lock);
+                    //pthread_cond_signal(&monitor_stuff->ME_cond);
+                    //pthread_mutex_unlock(&monitor_stuff->ME_lock);
+                    sem_post(ME_sem);
+                    //printf("90%% spent\n\n");
+                } else if ( before_plafond > 0.2*user_array[i].init_plafond && user_array[i].plafond_left <= 0.2*user_array[i].init_plafond ) {
+                    // if plafond is 80% spent, signal to user
+                    user_array[i].flag = 1;
+                    //pthread_mutex_lock(&monitor_stuff->ME_lock);
+                    //pthread_cond_signal(&monitor_stuff->ME_cond);
+                    //pthread_mutex_unlock(&monitor_stuff->ME_lock);
+                    sem_post(ME_sem);
+                    //printf("80%% spent\n\n");
+                }
                 sem_post(user_sem);
                 return 0;
             } else {
+                user_array[i].plafond_left = 0;
+                user_array[i].flag = 1;
+                //pthread_mutex_lock(&monitor_stuff->ME_lock);
+                //pthread_cond_signal(&monitor_stuff->ME_cond);
+                //pthread_mutex_unlock(&monitor_stuff->ME_lock);
+                sem_post(ME_sem);
+                //printf("100%% spent\n\n");
                 sem_post(user_sem);
                 return 1;
             }
@@ -919,6 +1039,8 @@ int create_client(int pid, int plafond) {
         if (user_array[i].id==-1) {                 // free user space, use it
             user_array[i].id = pid;
             user_array[i].plafond_left = plafond;
+            user_array[i].init_plafond = plafond;
+            user_array[i].flag = 0;
             sem_post(user_sem);
             return 0;
         } else if (user_array[i].id==pid) {
