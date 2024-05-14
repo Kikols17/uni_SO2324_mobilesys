@@ -240,7 +240,7 @@ int auth5g_request(char *req_type) {
 
 int response_handler(char *response) {
     /* Handle the response from the system */
-    if (strcmp(response, "REJECTED")==0) {
+    if (strcmp(response, "REJECT")==0) {
         fprintf(stdout, "[FROM SYS] Mobile user rejected by system...\n");
         return -1;
     } else if (strcmp(response, "ACCEPT")==0) {

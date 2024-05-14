@@ -488,9 +488,13 @@ int parallel_AuthorizationRequestManager() {
     while (1) {
         pthread_cond_wait(q[0].statecond, q[0].statecond_lock);
         //sprintf(logbuffer, "STATECOND SIGNAL RECEIVED, signal=%d\n", *q[0].state);
-        append_logfile(logbuffer);
+        //append_logfile(logbuffer);
         if (*q[0].state==1) {
             // create extra AE
+            if (child_pids[settings.AUTH_SERVERS]!=-1) {
+                append_logfile("[ERROR] EXTRA AUTHORIZATION_ENGINE ALREADY EXISTS, PANIC!");
+                system_panic();
+            }
             if (pipe(AE_unpipes[settings.AUTH_SERVERS])<0) {
                 append_logfile("[ERROR] COULD NOT CREATE UNNAMED PIPE FOR EXTRA AE\n");
                 system_panic();
@@ -509,6 +513,8 @@ int parallel_AuthorizationRequestManager() {
             kill(extra_AE_pid, SIGQUIT);
             write(AE_unpipes[settings.AUTH_SERVERS][1], "-1#", 4);  // dummy request to flush AE pipes
             waitpid(extra_AE_pid, NULL, 0);
+            close(AE_unpipes[settings.AUTH_SERVERS][0]);        // }
+            close(AE_unpipes[settings.AUTH_SERVERS][1]);        // } close extra AE pipes
             append_logfile("EXTRA AUTHORIZATION_ENGINE DESTROYED");
         }
     }

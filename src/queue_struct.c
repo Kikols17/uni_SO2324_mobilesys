@@ -6,6 +6,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "queue_struct.h"
 
@@ -68,6 +69,7 @@ int write_queue(queue *q, char *msg) {
     pthread_mutex_lock(q->writtencond_lock);    // }
     pthread_cond_signal(q->writtencond);        // } Signal the condition variable
     pthread_mutex_unlock(q->writtencond_lock);  // }
+    printf("[HELP] Writing to queue: %s\n", msg);
 
     if (count_queue(q) == q->size) {
         // queue is full
@@ -104,7 +106,7 @@ int read_queue(queue *q, char *msg, clock_t *timeout) {
         *q->state=0;                                // }
     }
     pthread_mutex_unlock(q->statecond_lock);
-    if (q->count == 0) {
+    if (count_queue(q) == 0) {
         // queue is empty
         return 1;
     }
@@ -112,12 +114,20 @@ int read_queue(queue *q, char *msg, clock_t *timeout) {
     strcpy(msg, q->req_queue[q->read_index]);   // }
     *timeout = q->time_queue[q->read_index];    // } Read the message and time
 
+    printf("[HELP] Reading from queue: %s\n", msg);
+
     q->read_index = (q->read_index + 1) % q->size;
 
     pthread_mutex_lock(&q->lock);
     q->count--;
     pthread_mutex_unlock(&q->lock);
     return 0;
+}
+
+unsigned long long get_time_millis(){
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (unsigned long long)(tv.tv_sec)*1000 + (unsigned long long)(tv.tv_usec)/1000;
 }
 
 #endif

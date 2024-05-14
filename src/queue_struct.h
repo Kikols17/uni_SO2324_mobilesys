@@ -38,4 +38,7 @@ int count_queue(queue *q);
 int write_queue(queue *q, char *msg);
 int read_queue(queue *q, char *msg, clock_t *time);
 
+/* UTILS */
+unsigned long long get_time_millis()
+
 #endif
