@@ -1,5 +1,5 @@
 /* 
- * Versão de 1ªMeta da disciplina Sistemas Operativos
+ * Versão de 2ªMeta da disciplina Sistemas Operativos
  * 
  * TRABALHO REALIZADO POR:
  *      Francisco Amado Lapa Marques Silva - 2022213583
