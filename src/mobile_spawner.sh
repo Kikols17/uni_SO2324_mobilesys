@@ -19,7 +19,7 @@
 #gnome-terminal -- bash -c "./mobile_user 1000000 1100000 1 1 1 1; exec bash & exit"
 
 gnome-terminal -- bash -c "./mobile_user 25 10 10 1 1 25; exec bash & exit"
-gnome-terminal -- bash -c "./mobile_user 100 100 1000 300 500 5; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 100 100 1000 300 100 5; exec bash & exit"
 gnome-terminal -- bash -c "./mobile_user 1000 500 5000 2000 1000 50; exec bash & exit"
-gnome-terminal -- bash -c "./mobile_user 50000 2000 600 20 10 5; exec bash & exit"
-gnome-terminal -- bash -c "./mobile_user 100 1000 500 100 150 1; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 50000 2000 1500 500 1000 5; exec bash & exit"
+gnome-terminal -- bash -c "./mobile_user 100 1000 500 300 1050 1; exec bash & exit"
