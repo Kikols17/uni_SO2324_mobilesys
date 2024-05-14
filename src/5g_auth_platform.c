@@ -87,7 +87,9 @@ int handle_request(int id, char *request, char* response);
 // client stuff
 int check_plafond(int pid, int data);
 int create_client(int pid, int plafond);
-int delete_client(int pid);
+int delete_client(int pid, int perm_flag);
+int reset_stats();
+int fetch_stats(int *request_count, int *data_count);
 
 
 
@@ -106,6 +108,9 @@ typedef struct User_data {
     int flag;                   // flag to check if plaffond has to be reported
     int init_plafond;           // initial plafond
     int plafond_left;           // plafond left ( >= 0 disconnect )
+
+    int request_count;          // number of requests made  } can be used by stats and reset
+    int data_count;             // number of data used      }
 } User_data;
 
 typedef struct Monitor_stuff {
@@ -207,11 +212,9 @@ int main(int argc, char *argv[]) {
         system_panic(-1);
     }
 
-    /* Create Monitor Engine shared memory */
-    if ( create_MEshmem()!=0 ) {
-        fprintf(stderr, "ERROR CAN'T CREATE SHARED MEMORY\n");
-        system_panic(-1);
-    }
+    int reset_stats();
+
+    
 
     append_logfile("5G_AUTH_PLATFORM SIMULATOR STARTING");
     append_logfile("PROCESS SYSTEM_MANAGER CREATED");
@@ -291,10 +294,10 @@ void close_system_manager(int sigint) {
     sem_unlink("log_sem");      // } unlink and close log_sem
     sem_close(user_sem);            // }
     sem_unlink("user_sem");         // } unlink and close user_sem
+    sem_close(ME_sem);
+    sem_unlink("ME_sem");
     shmdt(user_array);                  // }
     shmctl(user_shmid, IPC_RMID, 0);    // } free shared memory
-    shmdt(monitor_stuff);                   // }
-    shmctl(monitor_shmid, IPC_RMID, 0);     // } free shared memory
 
     exit(0);
 }
@@ -681,7 +684,7 @@ int parallel_MonitorEngine() {
                     msgsnd(message_queue_id, &msg, sizeof(msg), 0);
                     sprintf(msg.mtext, "DISCONNECT");
                     msgsnd(message_queue_id, &msg, sizeof(msg), 0);
-                    delete_client(user_array[i].id);
+                    delete_client(user_array[i].id, 1);
 
                 } else if ( plafond_percent >= 0.9 ) {
                     // if plafond is 80% spent, signal to user
@@ -972,10 +975,15 @@ int handle_request(int id, char *request, char* response) {
                 // backoffice order
                 if ( strcmp(arg1, "reset")==0 ) {
                     // reset
-                    sprintf(response, "[TODO]RESET");
+                    append_logfile("AUTHORIZATION_ENGINE RESETING STATS");
+                    sprintf(response, "Data has been reset.");
+                    reset_stats();
                 } else if ( strcmp(arg1, "data_stats")==0 ) {
                     // data_stats
-                    sprintf(response, "[TODO]DATA_STATS");
+                    int request_count, data_count;
+                    append_logfile("AUTHORIZATION_ENGINE FETCHING STATS");
+                    fetch_stats(&request_count, &data_count);
+                    sprintf(response, "Total requests: %d\tTotal data: %d", request_count, data_count);
                 } else {
                     // unknown order
                     sprintf(response, "NON-VALID REQUEST \"%s\".", arg1);
@@ -994,8 +1002,10 @@ int check_plafond(int pid, int data) {
     int before_plafond = user_array[0].plafond_left;
     for (int i=0; i<settings.MOBILE_USERS; i++) {
         if (user_array[i].id==pid) {
+            user_array[i].request_count++;
             if (user_array[i].plafond_left >= data) {
                 user_array[i].plafond_left -= data;
+                user_array[i].data_count += data;
                 if ( before_plafond > 0.1*user_array[i].init_plafond && user_array[i].plafond_left <= 0.1*user_array[i].init_plafond ) {
                     // if plafond is 90% spent, signal to user
                     user_array[i].flag = 1;
@@ -1016,6 +1026,8 @@ int check_plafond(int pid, int data) {
                 sem_post(user_sem);
                 return 0;
             } else {
+                // plafond is not enough
+                user_array[i].data_count += user_array[i].plafond_left;
                 user_array[i].plafond_left = 0;
                 user_array[i].flag = 1;
                 //pthread_mutex_lock(&monitor_stuff->ME_lock);
@@ -1052,18 +1064,49 @@ int create_client(int pid, int plafond) {
     return 1;
 }
 
-int delete_client(int pid) {
+int delete_client(int pid, int perm_flag) {
     /* Delete client */
-    sem_wait(user_sem);
+    printf("waiting for user_sem\n");
+    if (!perm_flag) {
+        sem_wait(user_sem);
+    }
+    printf("user_sem locked\n");
     for (int i=0; i<settings.MOBILE_USERS; i++) {
         if (user_array[i].id==pid) {
             user_array[i].id = -1;
             user_array[i].plafond_left = -1;
-            sem_post(user_sem);
+            if (!perm_flag) {
+                sem_post(user_sem);
+            }
             return 0;
         }
     }
-    sem_post(user_sem);
+    if (!perm_flag) {
+        sem_post(user_sem);
+    }
     return 1;
 }
 
+int reset_stats() {
+    /* Reset all stats */
+    sem_wait(user_sem);
+    for (int i=0; i<settings.MOBILE_USERS; i++) {
+        user_array[i].request_count = 0;
+        user_array[i].data_count = 0;
+    }
+    sem_post(user_sem);
+    return 0;
+}
+
+int fetch_stats(int *request_count, int *data_count) {
+    /* Fetch all stats */
+    *request_count = 0;
+    *data_count = 0;
+    sem_wait(user_sem);
+    for (int i=0; i<settings.MOBILE_USERS; i++) {
+        *request_count += user_array[i].request_count;
+        *data_count += user_array[i].data_count;
+    }
+    sem_post(user_sem);
+    return 0;
+}
